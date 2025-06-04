@@ -1,0 +1,387 @@
+// 卡片组件样式
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+  transition: all $transition-normal ease;
+
+  &:hover {
+    @apply shadow-md;
+  }
+
+  &.card-bordered {
+    @apply border-2;
+  }
+
+  &.card-compact {
+    @apply p-4;
+  }
+
+  &.card-large {
+    @apply p-8;
+  }
+
+  .card-header {
+    @apply mb-4 pb-4 border-b border-gray-100;
+
+    .card-title {
+      @apply text-lg font-semibold text-gray-900 mb-1;
+    }
+
+    .card-subtitle {
+      @apply text-sm text-gray-500;
+    }
+  }
+
+  .card-body {
+    @apply flex-1;
+  }
+
+  .card-footer {
+    @apply mt-4 pt-4 border-t border-gray-100;
+  }
+}
+
+// 按钮组件样式
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+
+  &.btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  &.btn-secondary {
+    @apply bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500;
+  }
+
+  &.btn-success {
+    @apply bg-success-600 text-white hover:bg-success-700 focus:ring-success-500;
+  }
+
+  &.btn-danger {
+    @apply bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
+  }
+
+  &.btn-warning {
+    @apply bg-warning-600 text-white hover:bg-warning-700 focus:ring-warning-500;
+  }
+
+  &.btn-outline {
+    @apply bg-transparent border-2;
+
+    &.btn-primary {
+      @apply border-primary-600 text-primary-600 hover:bg-primary-600 hover:text-white;
+    }
+
+    &.btn-secondary {
+      @apply border-gray-600 text-gray-600 hover:bg-gray-600 hover:text-white;
+    }
+  }
+
+  &.btn-ghost {
+    @apply bg-transparent border-0;
+
+    &.btn-primary {
+      @apply text-primary-600 hover:bg-primary-50;
+    }
+
+    &.btn-secondary {
+      @apply text-gray-600 hover:bg-gray-50;
+    }
+  }
+
+  &.btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  &.btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  &.btn-xl {
+    @apply px-8 py-4 text-lg;
+  }
+
+  &:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+// 徽章组件样式
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+
+  &.badge-primary {
+    @apply bg-primary-100 text-primary-800;
+  }
+
+  &.badge-success {
+    @apply bg-success-100 text-success-800;
+  }
+
+  &.badge-danger {
+    @apply bg-danger-100 text-danger-800;
+  }
+
+  &.badge-warning {
+    @apply bg-warning-100 text-warning-800;
+  }
+
+  &.badge-gray {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  &.badge-lg {
+    @apply px-3 py-1 text-sm;
+  }
+
+  &.badge-dot {
+    @apply w-2 h-2 p-0 rounded-full;
+  }
+}
+
+// 股票价格组件样式
+.stock-price {
+  @apply font-mono font-semibold;
+
+  &.price-up {
+    color: $stock-up-color;
+  }
+
+  &.price-down {
+    color: $stock-down-color;
+  }
+
+  &.price-flat {
+    color: $stock-flat-color;
+  }
+}
+
+// 股票变化组件样式
+.stock-change {
+  @apply inline-flex items-center font-mono text-sm;
+
+  &.change-up {
+    color: $stock-up-color;
+
+    &::before {
+      content: '▲';
+      @apply mr-1;
+    }
+  }
+
+  &.change-down {
+    color: $stock-down-color;
+
+    &::before {
+      content: '▼';
+      @apply mr-1;
+    }
+  }
+
+  &.change-flat {
+    color: $stock-flat-color;
+
+    &::before {
+      content: '—';
+      @apply mr-1;
+    }
+  }
+}
+
+// 推荐级别组件样式
+.recommendation-level {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+
+  &.level-strong-buy {
+    background-color: rgba($recommendation-strong-buy, 0.1);
+    color: $recommendation-strong-buy;
+  }
+
+  &.level-buy {
+    background-color: rgba($recommendation-buy, 0.1);
+    color: $recommendation-buy;
+  }
+
+  &.level-hold {
+    background-color: rgba($recommendation-hold, 0.1);
+    color: $recommendation-hold;
+  }
+
+  &.level-sell {
+    background-color: rgba($recommendation-sell, 0.1);
+    color: $recommendation-sell;
+  }
+
+  &.level-strong-sell {
+    background-color: rgba($recommendation-strong-sell, 0.1);
+    color: $recommendation-strong-sell;
+  }
+}
+
+// 策略状态组件样式
+.strategy-status {
+  @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium;
+
+  &.status-active {
+    background-color: rgba($strategy-active, 0.1);
+    color: $strategy-active;
+  }
+
+  &.status-inactive {
+    background-color: rgba($strategy-inactive, 0.1);
+    color: $strategy-inactive;
+  }
+
+  &.status-backtest {
+    background-color: rgba($strategy-backtest, 0.1);
+    color: $strategy-backtest;
+  }
+}
+
+// 性能指标组件样式
+.performance-indicator {
+  @apply inline-flex items-center px-2 py-1 rounded text-xs font-medium;
+
+  &.performance-excellent {
+    background-color: rgba($performance-excellent, 0.1);
+    color: $performance-excellent;
+  }
+
+  &.performance-good {
+    background-color: rgba($performance-good, 0.1);
+    color: $performance-good;
+  }
+
+  &.performance-average {
+    background-color: rgba($performance-average, 0.1);
+    color: $performance-average;
+  }
+
+  &.performance-poor {
+    background-color: rgba($performance-poor, 0.1);
+    color: $performance-poor;
+  }
+
+  &.performance-critical {
+    background-color: rgba($performance-critical, 0.1);
+    color: $performance-critical;
+  }
+}
+
+// 加载动画组件样式
+.loading-spinner {
+  @apply inline-block w-4 h-4 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin;
+
+  &.loading-sm {
+    @apply w-3 h-3;
+  }
+
+  &.loading-lg {
+    @apply w-6 h-6;
+  }
+
+  &.loading-xl {
+    @apply w-8 h-8;
+  }
+}
+
+// 骨架屏组件样式
+.skeleton {
+  @apply bg-gray-200 rounded animate-pulse;
+
+  &.skeleton-text {
+    @apply h-4 mb-2;
+
+    &:last-child {
+      @apply mb-0 w-3/4;
+    }
+  }
+
+  &.skeleton-title {
+    @apply h-6 mb-4;
+  }
+
+  &.skeleton-avatar {
+    @apply w-10 h-10 rounded-full;
+  }
+
+  &.skeleton-button {
+    @apply h-10 w-24;
+  }
+
+  &.skeleton-card {
+    @apply h-32;
+  }
+}
+
+// 空状态组件样式
+.empty-state {
+  @apply flex flex-col items-center justify-center py-12 text-center;
+
+  .empty-icon {
+    @apply w-16 h-16 text-gray-400 mb-4;
+  }
+
+  .empty-title {
+    @apply text-lg font-medium text-gray-900 mb-2;
+  }
+
+  .empty-description {
+    @apply text-sm text-gray-500 mb-6 max-w-sm;
+  }
+
+  .empty-action {
+    @apply mt-4;
+  }
+}
+
+// 数据表格组件样式
+.data-table {
+  @apply w-full border-collapse;
+
+  th {
+    @apply bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200;
+  }
+
+  td {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-b border-gray-200;
+  }
+
+  tbody tr {
+    @apply hover:bg-gray-50 transition-colors duration-150;
+  }
+
+  &.table-striped {
+    tbody tr:nth-child(even) {
+      @apply bg-gray-50;
+    }
+  }
+
+  &.table-bordered {
+    @apply border border-gray-200 rounded-lg overflow-hidden;
+
+    th, td {
+      @apply border-r border-gray-200;
+
+      &:last-child {
+        @apply border-r-0;
+      }
+    }
+  }
+}
+
+// 图表容器样式
+.chart-container {
+  @apply relative w-full;
+
+  .chart-loading {
+    @apply absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10;
+  }
+
+  .chart-error {
+    @apply absolute inset-0 flex items-center justify-center text-red-500 bg-red-50 rounded-lg;
+  }
+
+  .chart-no-data {
+    @apply absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-50 rounded-lg;
+  }
+}

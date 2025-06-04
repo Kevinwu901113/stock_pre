@@ -1,0 +1,194 @@
+// 颜色变量
+$color-primary-50: #eff6ff;
+$color-primary-100: #dbeafe;
+$color-primary-200: #bfdbfe;
+$color-primary-300: #93c5fd;
+$color-primary-400: #60a5fa;
+$color-primary-500: #3b82f6;
+$color-primary-600: #2563eb;
+$color-primary-700: #1d4ed8;
+$color-primary-800: #1e40af;
+$color-primary-900: #1e3a8a;
+
+$color-success-50: #f0fdf4;
+$color-success-100: #dcfce7;
+$color-success-200: #bbf7d0;
+$color-success-300: #86efac;
+$color-success-400: #4ade80;
+$color-success-500: #22c55e;
+$color-success-600: #16a34a;
+$color-success-700: #15803d;
+$color-success-800: #166534;
+$color-success-900: #14532d;
+
+$color-danger-50: #fef2f2;
+$color-danger-100: #fee2e2;
+$color-danger-200: #fecaca;
+$color-danger-300: #fca5a5;
+$color-danger-400: #f87171;
+$color-danger-500: #ef4444;
+$color-danger-600: #dc2626;
+$color-danger-700: #b91c1c;
+$color-danger-800: #991b1b;
+$color-danger-900: #7f1d1d;
+
+$color-warning-50: #fffbeb;
+$color-warning-100: #fef3c7;
+$color-warning-200: #fde68a;
+$color-warning-300: #fcd34d;
+$color-warning-400: #fbbf24;
+$color-warning-500: #f59e0b;
+$color-warning-600: #d97706;
+$color-warning-700: #b45309;
+$color-warning-800: #92400e;
+$color-warning-900: #78350f;
+
+$color-gray-50: #f9fafb;
+$color-gray-100: #f3f4f6;
+$color-gray-200: #e5e7eb;
+$color-gray-300: #d1d5db;
+$color-gray-400: #9ca3af;
+$color-gray-500: #6b7280;
+$color-gray-600: #4b5563;
+$color-gray-700: #374151;
+$color-gray-800: #1f2937;
+$color-gray-900: #111827;
+
+// 字体变量
+$font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+$font-family-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+
+// 字体大小变量
+$font-size-xs: 0.75rem;
+$font-size-sm: 0.875rem;
+$font-size-base: 1rem;
+$font-size-lg: 1.125rem;
+$font-size-xl: 1.25rem;
+$font-size-2xl: 1.5rem;
+$font-size-3xl: 1.875rem;
+$font-size-4xl: 2.25rem;
+$font-size-5xl: 3rem;
+
+// 行高变量
+$line-height-tight: 1.25;
+$line-height-snug: 1.375;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.625;
+$line-height-loose: 2;
+
+// 间距变量
+$spacing-0: 0;
+$spacing-1: 0.25rem;
+$spacing-2: 0.5rem;
+$spacing-3: 0.75rem;
+$spacing-4: 1rem;
+$spacing-5: 1.25rem;
+$spacing-6: 1.5rem;
+$spacing-8: 2rem;
+$spacing-10: 2.5rem;
+$spacing-12: 3rem;
+$spacing-16: 4rem;
+$spacing-20: 5rem;
+$spacing-24: 6rem;
+$spacing-32: 8rem;
+$spacing-40: 10rem;
+$spacing-48: 12rem;
+$spacing-56: 14rem;
+$spacing-64: 16rem;
+
+// 圆角变量
+$border-radius-none: 0;
+$border-radius-sm: 0.125rem;
+$border-radius: 0.25rem;
+$border-radius-md: 0.375rem;
+$border-radius-lg: 0.5rem;
+$border-radius-xl: 0.75rem;
+$border-radius-2xl: 1rem;
+$border-radius-3xl: 1.5rem;
+$border-radius-full: 9999px;
+
+// 阴影变量
+$shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+$shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+$shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+$shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+$shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+$shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+$shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+$shadow-none: none;
+
+// 过渡变量
+$transition-fast: 150ms;
+$transition-normal: 300ms;
+$transition-slow: 500ms;
+
+// Z-index变量
+$z-index-0: 0;
+$z-index-10: 10;
+$z-index-20: 20;
+$z-index-30: 30;
+$z-index-40: 40;
+$z-index-50: 50;
+$z-index-auto: auto;
+
+// 断点变量
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-2xl: 1536px;
+
+// 容器最大宽度
+$container-max-width: 1280px;
+
+// 布局变量
+$header-height: 64px;
+$sidebar-width: 240px;
+$sidebar-collapsed-width: 80px;
+$footer-height: 60px;
+
+// 特定组件变量
+$card-border-radius: 12px;
+$button-border-radius: 8px;
+$input-border-radius: 8px;
+$table-border-radius: 8px;
+$modal-border-radius: 12px;
+
+// 图表颜色
+$chart-colors: (
+  blue: #3b82f6,
+  green: #22c55e,
+  red: #ef4444,
+  yellow: #f59e0b,
+  purple: #8b5cf6,
+  pink: #ec4899,
+  indigo: #6366f1,
+  cyan: #06b6d4,
+  orange: #f97316,
+  teal: #14b8a6
+);
+
+// 股票相关颜色
+$stock-up-color: #ef4444; // 上涨颜色（中国市场红色表示上涨）
+$stock-down-color: #22c55e; // 下跌颜色（中国市场绿色表示下跌）
+$stock-flat-color: #6b7280; // 平盘颜色
+
+// 推荐级别颜色
+$recommendation-strong-buy: #b91c1c; // 强烈推荐买入
+$recommendation-buy: #ef4444; // 推荐买入
+$recommendation-hold: #f59e0b; // 持有
+$recommendation-sell: #22c55e; // 推荐卖出
+$recommendation-strong-sell: #15803d; // 强烈推荐卖出
+
+// 策略相关颜色
+$strategy-active: #3b82f6; // 活跃策略
+$strategy-inactive: #6b7280; // 非活跃策略
+$strategy-backtest: #8b5cf6; // 回测模式
+
+// 性能指标颜色
+$performance-excellent: #15803d; // 优秀
+$performance-good: #22c55e; // 良好
+$performance-average: #f59e0b; // 一般
+$performance-poor: #ef4444; // 较差
+$performance-critical: #b91c1c; // 严重不佳
