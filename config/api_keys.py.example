@@ -1,0 +1,41 @@
+# API密钥配置示例文件
+# 复制此文件为 api_keys.py 并填入真实的API密钥
+
+# Tushare API配置
+# 注册地址: https://tushare.pro/register
+TUSHARE_TOKEN = "your_tushare_token_here"
+
+# 东方财富API配置(如果需要)
+EASTMONEY_API_KEY = "your_eastmoney_api_key_here"
+
+# 新浪财经API(通常不需要密钥)
+SINA_API_ENABLED = True
+
+# 其他数据源API密钥
+# 根据需要添加更多数据源的配置
+
+# 第三方服务配置
+# 如果使用云服务或其他API
+CLOUD_SERVICE_KEY = "your_cloud_service_key_here"
+CLOUD_SERVICE_SECRET = "your_cloud_service_secret_here"
+
+# 数据库连接配置(如果使用云数据库)
+CLOUD_DATABASE_URL = "postgresql://user:password@host:port/database"
+
+# Redis连接配置(如果使用云Redis)
+CLOUD_REDIS_URL = "redis://user:password@host:port/db"
+
+# 邮件服务配置(用于通知)
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USER = "your_email@gmail.com"
+EMAIL_PASSWORD = "your_email_password"
+
+# 微信/钉钉机器人配置(用于推送通知)
+WECHAT_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your_key"
+DINGTALK_WEBHOOK_URL = "https://oapi.dingtalk.com/robot/send?access_token=your_token"
+
+# AI服务配置(预留)
+OPENAI_API_KEY = "your_openai_api_key_here"
+BAIDU_AI_API_KEY = "your_baidu_ai_api_key_here"
+BAIDU_AI_SECRET_KEY = "your_baidu_ai_secret_key_here"

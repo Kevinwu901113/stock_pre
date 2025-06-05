@@ -1,0 +1,129 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+import sys
+import os
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+from config.settings import settings
+from config.database import init_database
+from app.api import recommendations, stocks, strategies, data
+from app.core.exceptions import setup_exception_handlers
+from app.core.middleware import setup_middleware
+from loguru import logger
+
+
+# 创建FastAPI应用
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="A股量化选股推荐系统API",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# 设置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 设置受信任主机
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]  # 生产环境应该限制具体域名
+)
+
+# 设置自定义中间件
+setup_middleware(app)
+
+# 设置异常处理器
+setup_exception_handlers(app)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动事件"""
+    logger.info(f"启动 {settings.APP_NAME} v{settings.APP_VERSION}")
+    
+    # 初始化数据库
+    try:
+        init_database()
+        logger.info("数据库初始化成功")
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {e}")
+    
+    # 其他启动任务
+    logger.info("应用启动完成")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭事件"""
+    logger.info("应用正在关闭...")
+
+
+# 健康检查
+@app.get("/health")
+async def health_check():
+    """健康检查接口"""
+    return {
+        "status": "healthy",
+        "app_name": settings.APP_NAME,
+        "version": settings.APP_VERSION
+    }
+
+
+# 根路径
+@app.get("/")
+async def root():
+    """根路径"""
+    return {
+        "message": f"欢迎使用{settings.APP_NAME}",
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+# 注册API路由
+app.include_router(
+    recommendations.router,
+    prefix="/api/v1/recommendations",
+    tags=["推荐"]
+)
+
+app.include_router(
+    stocks.router,
+    prefix="/api/v1/stocks",
+    tags=["股票"]
+)
+
+app.include_router(
+    strategies.router,
+    prefix="/api/v1/strategies",
+    tags=["策略"]
+)
+
+app.include_router(
+    data.router,
+    prefix="/api/v1/data",
+    tags=["数据"]
+)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower()
+    )
