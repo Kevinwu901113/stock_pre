@@ -1,15 +1,35 @@
 """策略分析器
 
 使用AI模型对量化策略进行分析、优化和评估。
-"""
+包含机器学习模型训练和预测功能。"""
 
+import os
+import sys
+import joblib
+import pickle
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import numpy as np
+import pandas as pd
 from loguru import logger
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    logger.warning("XGBoost未安装，将使用其他算法")
 
 from .model_manager import model_manager
 from config.settings import settings
+from config.database import get_db
+from backend.app.models.stock import StockPrice, Stock
 
 
 class StrategyAnalyzer:
@@ -30,6 +50,12 @@ class StrategyAnalyzer:
             'win_rate': 0.15,
             'profit_loss_ratio': 0.1
         }
+        
+        # 机器学习模型相关
+        self.models = {}
+        self.scalers = {}
+        self.model_dir = "ai/models"
+        os.makedirs(self.model_dir, exist_ok=True)
     
     async def analyze_strategy_performance(
         self,
@@ -649,6 +675,431 @@ class StrategyAnalyzer:
             self.logger.error(f"生成比较建议失败: {e}")
         
         return recommendations if recommendations else ['建议继续监控各策略表现']
+
+
+    def prepare_ml_features(self, stock_data: pd.DataFrame) -> pd.DataFrame:
+        """准备机器学习特征
+        
+        Args:
+            stock_data: 股票价格数据
+            
+        Returns:
+            特征数据框
+        """
+        try:
+            df = stock_data.copy()
+            df = df.sort_values('trade_date')
+            
+            # 基础价格特征
+            df['price_change'] = df['close_price'].pct_change()
+            df['high_low_ratio'] = df['high_price'] / df['low_price']
+            df['open_close_ratio'] = df['open_price'] / df['close_price']
+            
+            # 移动平均线特征
+            for period in [5, 10, 20, 30]:
+                df[f'ma_{period}'] = df['close_price'].rolling(window=period).mean()
+                df[f'price_ma_{period}_ratio'] = df['close_price'] / df[f'ma_{period}']
+                df[f'ma_{period}_slope'] = df[f'ma_{period}'].pct_change()
+            
+            # 技术指标特征
+            df['rsi'] = self.calculate_rsi(df['close_price'])
+            df['volume_ma_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+            df['turnover_ma_ratio'] = df['turnover_rate'] / df['turnover_rate'].rolling(window=20).mean()
+            
+            # MACD特征
+            macd_data = self.calculate_macd_features(df['close_price'])
+            df = pd.concat([df, macd_data], axis=1)
+            
+            # 布林带特征
+            bb_data = self.calculate_bollinger_features(df['close_price'])
+            df = pd.concat([df, bb_data], axis=1)
+            
+            # 波动率特征
+            df['volatility_5'] = df['price_change'].rolling(window=5).std()
+            df['volatility_20'] = df['price_change'].rolling(window=20).std()
+            
+            # 成交量特征
+            df['volume_change'] = df['volume'].pct_change()
+            df['volume_price_trend'] = df['volume_change'] * df['price_change']
+            
+            # 市场强度特征
+            df['market_strength'] = (df['close_price'] - df['low_price']) / (df['high_price'] - df['low_price'])
+            
+            # 连续涨跌天数
+            df['consecutive_up'] = (df['price_change'] > 0).astype(int).groupby(
+                (df['price_change'] <= 0).cumsum()).cumsum()
+            df['consecutive_down'] = (df['price_change'] < 0).astype(int).groupby(
+                (df['price_change'] >= 0).cumsum()).cumsum()
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"准备特征失败: {e}")
+            return pd.DataFrame()
+    
+    def calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+        """计算RSI指标"""
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    def calculate_macd_features(self, prices: pd.Series) -> pd.DataFrame:
+        """计算MACD特征"""
+        ema_12 = prices.ewm(span=12).mean()
+        ema_26 = prices.ewm(span=26).mean()
+        macd_line = ema_12 - ema_26
+        signal_line = macd_line.ewm(span=9).mean()
+        histogram = macd_line - signal_line
+        
+        return pd.DataFrame({
+            'macd_line': macd_line,
+            'macd_signal': signal_line,
+            'macd_histogram': histogram,
+            'macd_above_signal': (macd_line > signal_line).astype(int)
+        })
+    
+    def calculate_bollinger_features(self, prices: pd.Series, period: int = 20) -> pd.DataFrame:
+        """计算布林带特征"""
+        ma = prices.rolling(window=period).mean()
+        std = prices.rolling(window=period).std()
+        upper_band = ma + (2 * std)
+        lower_band = ma - (2 * std)
+        
+        return pd.DataFrame({
+            'bb_upper': upper_band,
+            'bb_middle': ma,
+            'bb_lower': lower_band,
+            'bb_width': (upper_band - lower_band) / ma,
+            'bb_position': (prices - lower_band) / (upper_band - lower_band)
+        })
+    
+    def create_labels(self, df: pd.DataFrame, target_return: float = 0.02) -> pd.Series:
+        """创建训练标签
+        
+        Args:
+            df: 数据框
+            target_return: 目标收益率阈值
+            
+        Returns:
+            标签序列 (1: 买入, 0: 不买入)
+        """
+        # 计算次日收益率
+        df['next_day_return'] = df['close_price'].shift(-1) / df['close_price'] - 1
+        
+        # 创建二分类标签
+        labels = (df['next_day_return'] > target_return).astype(int)
+        
+        return labels
+    
+    def get_training_data(self, start_date: date, end_date: date, min_samples: int = 1000) -> Tuple[pd.DataFrame, pd.Series]:
+        """获取训练数据
+        
+        Args:
+            start_date: 开始日期
+            end_date: 结束日期
+            min_samples: 最小样本数
+            
+        Returns:
+            特征数据和标签
+        """
+        try:
+            db = next(get_db())
+            
+            # 获取活跃股票
+            active_stocks = db.query(Stock).filter(
+                Stock.is_active == True,
+                ~Stock.name.like('%ST%'),
+                ~Stock.name.like('%退%')
+            ).limit(500).all()  # 限制股票数量避免内存问题
+            
+            all_features = []
+            all_labels = []
+            
+            for stock in active_stocks:
+                try:
+                    # 获取股票价格数据
+                    prices = db.query(StockPrice).filter(
+                        StockPrice.stock_code == stock.code,
+                        StockPrice.trade_date >= start_date,
+                        StockPrice.trade_date <= end_date
+                    ).order_by(StockPrice.trade_date).all()
+                    
+                    if len(prices) < 60:  # 至少需要60天数据
+                        continue
+                    
+                    # 转换为DataFrame
+                    df = pd.DataFrame([{
+                        'trade_date': p.trade_date,
+                        'open_price': p.open_price,
+                        'high_price': p.high_price,
+                        'low_price': p.low_price,
+                        'close_price': p.close_price,
+                        'volume': p.volume,
+                        'turnover_rate': p.turnover_rate or 0
+                    } for p in prices])
+                    
+                    # 准备特征
+                    features_df = self.prepare_ml_features(df)
+                    
+                    # 创建标签
+                    labels = self.create_labels(features_df)
+                    
+                    # 选择特征列
+                    feature_columns = [
+                        'price_change', 'high_low_ratio', 'open_close_ratio',
+                        'price_ma_5_ratio', 'price_ma_10_ratio', 'price_ma_20_ratio',
+                        'ma_5_slope', 'ma_10_slope', 'ma_20_slope',
+                        'rsi', 'volume_ma_ratio', 'turnover_ma_ratio',
+                        'macd_line', 'macd_histogram', 'macd_above_signal',
+                        'bb_width', 'bb_position',
+                        'volatility_5', 'volatility_20',
+                        'volume_change', 'volume_price_trend',
+                        'market_strength', 'consecutive_up', 'consecutive_down'
+                    ]
+                    
+                    # 过滤有效数据
+                    valid_data = features_df[feature_columns + ['trade_date']].dropna()
+                    valid_labels = labels[valid_data.index]
+                    
+                    if len(valid_data) > 30:
+                        all_features.append(valid_data[feature_columns])
+                        all_labels.append(valid_labels)
+                        
+                except Exception as e:
+                    self.logger.error(f"处理股票{stock.code}数据失败: {e}")
+                    continue
+            
+            if not all_features:
+                raise ValueError("没有获取到有效的训练数据")
+            
+            # 合并所有数据
+            X = pd.concat(all_features, ignore_index=True)
+            y = pd.concat(all_labels, ignore_index=True)
+            
+            # 检查样本数量
+            if len(X) < min_samples:
+                self.logger.warning(f"训练样本数量({len(X)})少于最小要求({min_samples})")
+            
+            self.logger.info(f"获取训练数据完成: {len(X)}个样本, {len(X.columns)}个特征")
+            self.logger.info(f"正样本比例: {y.mean():.2%}")
+            
+            return X, y
+            
+        except Exception as e:
+            self.logger.error(f"获取训练数据失败: {e}")
+            return pd.DataFrame(), pd.Series()
+        finally:
+            db.close()
+    
+    def train_model(self, model_name: str = 'logistic_regression', test_size: float = 0.2) -> Dict[str, Any]:
+        """训练模型
+        
+        Args:
+            model_name: 模型名称 ('logistic_regression', 'random_forest', 'xgboost')
+            test_size: 测试集比例
+            
+        Returns:
+            训练结果
+        """
+        try:
+            self.logger.info(f"开始训练{model_name}模型")
+            
+            # 获取训练数据
+            end_date = date.today() - timedelta(days=1)
+            start_date = end_date - timedelta(days=365 * 2)  # 2年数据
+            
+            X, y = self.get_training_data(start_date, end_date)
+            
+            if X.empty or y.empty:
+                raise ValueError("没有可用的训练数据")
+            
+            # 分割训练集和测试集
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=42, stratify=y
+            )
+            
+            # 创建模型管道
+            if model_name == 'logistic_regression':
+                model = Pipeline([
+                    ('scaler', StandardScaler()),
+                    ('classifier', LogisticRegression(random_state=42, max_iter=1000))
+                ])
+            elif model_name == 'random_forest':
+                model = Pipeline([
+                    ('scaler', StandardScaler()),
+                    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+                ])
+            elif model_name == 'xgboost' and XGBOOST_AVAILABLE:
+                model = Pipeline([
+                    ('scaler', StandardScaler()),
+                    ('classifier', xgb.XGBClassifier(random_state=42))
+                ])
+            else:
+                raise ValueError(f"不支持的模型类型: {model_name}")
+            
+            # 训练模型
+            model.fit(X_train, y_train)
+            
+            # 预测
+            y_pred = model.predict(X_test)
+            y_pred_proba = model.predict_proba(X_test)[:, 1]
+            
+            # 评估模型
+            auc_score = roc_auc_score(y_test, y_pred_proba)
+            
+            # 交叉验证
+            cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='roc_auc')
+            
+            # 保存模型
+            model_file = os.path.join(self.model_dir, f"{model_name}_model.joblib")
+            joblib.dump(model, model_file)
+            
+            # 保存特征名称
+            feature_names_file = os.path.join(self.model_dir, f"{model_name}_features.pkl")
+            with open(feature_names_file, 'wb') as f:
+                pickle.dump(list(X.columns), f)
+            
+            self.models[model_name] = model
+            
+            results = {
+                'model_name': model_name,
+                'train_samples': len(X_train),
+                'test_samples': len(X_test),
+                'auc_score': auc_score,
+                'cv_mean': cv_scores.mean(),
+                'cv_std': cv_scores.std(),
+                'classification_report': classification_report(y_test, y_pred),
+                'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
+                'model_file': model_file,
+                'feature_names_file': feature_names_file
+            }
+            
+            self.logger.info(f"模型训练完成: AUC={auc_score:.3f}, CV={cv_scores.mean():.3f}±{cv_scores.std():.3f}")
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"训练模型失败: {e}")
+            return {}
+    
+    def load_model(self, model_name: str) -> bool:
+        """加载已训练的模型
+        
+        Args:
+            model_name: 模型名称
+            
+        Returns:
+            是否加载成功
+        """
+        try:
+            model_file = os.path.join(self.model_dir, f"{model_name}_model.joblib")
+            
+            if not os.path.exists(model_file):
+                self.logger.warning(f"模型文件不存在: {model_file}")
+                return False
+            
+            model = joblib.load(model_file)
+            self.models[model_name] = model
+            
+            self.logger.info(f"模型{model_name}加载成功")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"加载模型{model_name}失败: {e}")
+            return False
+    
+    def predict_stock(self, model_name: str, stock_code: str, days: int = 60) -> Optional[Dict[str, Any]]:
+        """使用模型预测股票
+        
+        Args:
+            model_name: 模型名称
+            stock_code: 股票代码
+            days: 历史数据天数
+            
+        Returns:
+            预测结果
+        """
+        try:
+            if model_name not in self.models:
+                if not self.load_model(model_name):
+                    return None
+            
+            model = self.models[model_name]
+            
+            # 获取股票数据
+            db = next(get_db())
+            end_date = date.today()
+            start_date = end_date - timedelta(days=days + 30)  # 多获取一些数据用于计算指标
+            
+            prices = db.query(StockPrice).filter(
+                StockPrice.stock_code == stock_code,
+                StockPrice.trade_date >= start_date,
+                StockPrice.trade_date <= end_date
+            ).order_by(StockPrice.trade_date).all()
+            
+            if len(prices) < 30:
+                return None
+            
+            # 转换为DataFrame
+            df = pd.DataFrame([{
+                'trade_date': p.trade_date,
+                'open_price': p.open_price,
+                'high_price': p.high_price,
+                'low_price': p.low_price,
+                'close_price': p.close_price,
+                'volume': p.volume,
+                'turnover_rate': p.turnover_rate or 0
+            } for p in prices])
+            
+            # 准备特征
+            features_df = self.prepare_ml_features(df)
+            
+            # 获取最新数据
+            latest_data = features_df.iloc[-1:]
+            
+            # 选择特征列（需要与训练时一致）
+            feature_columns = [
+                'price_change', 'high_low_ratio', 'open_close_ratio',
+                'price_ma_5_ratio', 'price_ma_10_ratio', 'price_ma_20_ratio',
+                'ma_5_slope', 'ma_10_slope', 'ma_20_slope',
+                'rsi', 'volume_ma_ratio', 'turnover_ma_ratio',
+                'macd_line', 'macd_histogram', 'macd_above_signal',
+                'bb_width', 'bb_position',
+                'volatility_5', 'volatility_20',
+                'volume_change', 'volume_price_trend',
+                'market_strength', 'consecutive_up', 'consecutive_down'
+            ]
+            
+            X = latest_data[feature_columns]
+            
+            if X.isnull().any().any():
+                self.logger.warning(f"股票{stock_code}特征数据包含缺失值")
+                return None
+            
+            # 预测
+            prediction = model.predict(X)[0]
+            prediction_proba = model.predict_proba(X)[0]
+            
+            result = {
+                'stock_code': stock_code,
+                'prediction': int(prediction),
+                'buy_probability': float(prediction_proba[1]),
+                'confidence': float(max(prediction_proba)),
+                'model_name': model_name,
+                'prediction_date': datetime.now(),
+                'features': X.iloc[0].to_dict()
+            }
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"预测失败 {stock_code}: {e}")
+            return None
+         finally:
+             db.close()
 
 
 # 全局策略分析器实例

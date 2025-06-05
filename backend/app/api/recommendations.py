@@ -1,70 +1,105 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 
 from config.database import get_db
-from app.models.stock import (
+from backend.app.core.response import success_response, error_response, paginated_response, convert_keys_to_camel
+from backend.app.models.stock import (
     Recommendation, Stock, StockPrice,
     RecommendationResponse, RecommendationWithStock,
     RecommendationListRequest, RecommendationType,
     RecommendationListResponse
 )
-from app.services.recommendation_service import RecommendationService
-from app.core.exceptions import ValidationException
+from backend.app.services.recommendation_service import RecommendationService
+from backend.app.core.exceptions import ValidationException
 from loguru import logger
 
 router = APIRouter()
 
 
-@router.get("/buy", response_model=List[RecommendationWithStock])
+@router.get("/buy")
 async def get_buy_recommendations(
-    limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
-    min_confidence: float = Query(0.6, ge=0, le=1, description="最小置信度"),
-    strategy: Optional[str] = Query(None, description="策略筛选"),
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    date: Optional[str] = Query(None, description="日期筛选，格式：YYYY-MM-DD"),
     db: Session = Depends(get_db)
 ):
-    """获取买入推荐列表"""
+    """获取买入推荐 - RESTful风格"""
     try:
         service = RecommendationService(db)
-        recommendations = await service.get_active_recommendations(
-            recommendation_type=RecommendationType.BUY,
-            limit=limit,
-            min_confidence=min_confidence,
-            strategy_name=strategy
+        
+        # 如果指定了日期，按日期筛选
+        if date:
+            from datetime import datetime
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            recommendations = service.get_recommendations_by_date(
+                recommendation_type=RecommendationType.BUY,
+                target_date=target_date,
+                limit=limit
+            )
+        else:
+            # 默认获取今日推荐
+            recommendations = service.get_today_recommendations(
+                recommendation_type=RecommendationType.BUY,
+                limit=limit
+            )
+        
+        # 转换字段名为camelCase
+        recommendations_data = [convert_keys_to_camel(rec.dict()) for rec in recommendations]
+        
+        return success_response(
+            data=recommendations_data,
+            message="获取买入推荐成功"
         )
-        
-        logger.info(f"返回 {len(recommendations)} 条买入推荐")
-        return recommendations
-        
+    except ValueError as e:
+        logger.error(f"日期格式错误: {str(e)}")
+        return error_response(message="日期格式错误，请使用YYYY-MM-DD格式", code=400)
     except Exception as e:
         logger.error(f"获取买入推荐失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取买入推荐失败")
+        return error_response(message="获取买入推荐失败", code=500)
 
 
-@router.get("/sell", response_model=List[RecommendationWithStock])
+@router.get("/sell")
 async def get_sell_recommendations(
-    limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
-    min_confidence: float = Query(0.6, ge=0, le=1, description="最小置信度"),
-    strategy: Optional[str] = Query(None, description="策略筛选"),
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    date: Optional[str] = Query(None, description="日期筛选，格式：YYYY-MM-DD"),
     db: Session = Depends(get_db)
 ):
-    """获取卖出推荐列表"""
+    """获取卖出推荐 - RESTful风格"""
     try:
         service = RecommendationService(db)
-        recommendations = await service.get_active_recommendations(
-            recommendation_type=RecommendationType.SELL,
-            limit=limit,
-            min_confidence=min_confidence,
-            strategy_name=strategy
+        
+        # 如果指定了日期，按日期筛选
+        if date:
+            from datetime import datetime
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            recommendations = service.get_recommendations_by_date(
+                recommendation_type=RecommendationType.SELL,
+                target_date=target_date,
+                limit=limit
+            )
+        else:
+            # 默认获取今日推荐
+            recommendations = service.get_today_recommendations(
+                recommendation_type=RecommendationType.SELL,
+                limit=limit
+            )
+        
+        # 转换字段名为camelCase
+        recommendations_data = [convert_keys_to_camel(rec.dict()) for rec in recommendations]
+        
+        return success_response(
+            data=recommendations_data,
+            message="获取卖出推荐成功"
         )
-        
-        logger.info(f"返回 {len(recommendations)} 条卖出推荐")
-        return recommendations
-        
+    except ValueError as e:
+        logger.error(f"日期格式错误: {str(e)}")
+        return error_response(message="日期格式错误，请使用YYYY-MM-DD格式", code=400)
     except Exception as e:
         logger.error(f"获取卖出推荐失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取卖出推荐失败")
+        return error_response(message="获取卖出推荐失败", code=500)
 
 
 @router.get("/today", response_model=List[RecommendationWithStock])
@@ -78,11 +113,9 @@ async def get_today_recommendations(
         service = RecommendationService(db)
         
         # 获取今日推荐
-        today = datetime.now().date()
-        recommendations = await service.get_recommendations_by_date(
-            date=today,
+        recommendations = service.get_today_recommendations(
             recommendation_type=recommendation_type,
-            strategy_name=strategy
+            limit=20
         )
         
         logger.info(f"返回今日 {len(recommendations)} 条推荐")
@@ -118,7 +151,7 @@ async def get_historical_recommendations(
             raise ValidationException(f"查询范围不能超过{max_days}天")
         
         service = RecommendationService(db)
-        result = await service.get_historical_recommendations_paginated(
+        result = service.get_historical_recommendations_paginated(
             date_from=date_from,
             date_to=date_to,
             recommendation_type=recommendation_type,
@@ -133,7 +166,9 @@ async def get_historical_recommendations(
     except ValidationException:
         raise
     except Exception as e:
+        import traceback
         logger.error(f"获取历史推荐失败: {str(e)}")
+        logger.error(f"详细错误信息: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="获取历史推荐失败")
 
 
@@ -154,7 +189,7 @@ async def get_stock_recommendations(
         
         # 获取推荐历史
         date_from = datetime.now() - timedelta(days=days)
-        recommendations = await service.get_stock_recommendations(
+        recommendations = service.get_stock_recommendations(
             stock_code=stock_code,
             date_from=date_from
         )
@@ -236,7 +271,7 @@ async def get_recommendations_summary(
     """获取推荐汇总信息"""
     try:
         service = RecommendationService(db)
-        summary = await service.get_recommendations_summary()
+        summary = service.get_recommendations_summary()
         
         logger.info("返回推荐汇总信息")
         return summary

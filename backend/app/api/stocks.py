@@ -1,23 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 
 from config.database import get_db
-from app.models.stock import (
-    Stock, StockPrice,
-    StockResponse, StockPriceResponse,
-    StockListRequest
+from backend.app.models.stock import (
+    Stock, StockPrice, StockResponse, StockPriceResponse,
+    StockListRequest, StockListResponse
 )
-from app.services.stock_service import StockService
-from app.core.exceptions import ValidationException
+from backend.app.services.stock_service import StockService
+from backend.app.core.exceptions import ValidationException
+from backend.app.core.response import success_response, error_response, paginated_response, convert_keys_to_camel
 from loguru import logger
 
 router = APIRouter()
 
 
-@router.get("/list")
-async def get_stock_list(
+@router.get("/")
+async def get_stocks(
+    request: Request,
     market: Optional[str] = Query(None, description="市场筛选(SH/SZ)"),
     industry: Optional[str] = Query(None, description="行业筛选"),
     search: Optional[str] = Query(None, description="搜索关键词(代码或名称)"),
@@ -25,8 +26,10 @@ async def get_stock_list(
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     db: Session = Depends(get_db)
 ):
-    """获取股票列表"""
+    """获取股票列表 - RESTful风格"""
     try:
+        logger.info(f"接收到股票列表请求 - market: {market}, industry: {industry}, search: {search}, page: {page}, size: {size}")
+        
         service = StockService(db)
         stocks = await service.get_stock_list(
             market=market,
@@ -36,35 +39,51 @@ async def get_stock_list(
             size=size
         )
         
-        logger.info(f"返回 {stocks.total} 只股票")
-        return stocks
+        # 转换字段名为camelCase
+        items = [convert_keys_to_camel(stock.dict()) for stock in stocks.items]
+        
+        logger.info(f"成功返回 {stocks.total} 只股票，当前页 {len(stocks.items)} 条记录")
+        return paginated_response(
+            items=items,
+            total=stocks.total,
+            page=page,
+            size=size,
+            message="获取股票列表成功"
+        )
         
     except Exception as e:
         logger.error(f"获取股票列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取股票列表失败")
+        import traceback
+        logger.error(f"错误堆栈: {traceback.format_exc()}")
+        return error_response(message="获取股票列表失败", code=500)
 
 
-@router.get("/{stock_code}", response_model=StockResponse)
-async def get_stock_info(
+@router.get("/{stock_code}")
+async def get_stock(
     stock_code: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """获取股票详细信息"""
+    """获取股票详细信息 - RESTful风格"""
     try:
         service = StockService(db)
-        stock = await service.get_stock_by_code(stock_code)
+        stock = await service.get_stock_detail(stock_code)
         
         if not stock:
-            raise HTTPException(status_code=404, detail="股票不存在")
+            return error_response(message="股票不存在", code=404)
+        
+        # 转换字段名为camelCase
+        stock_data = convert_keys_to_camel(stock.dict())
         
         logger.info(f"返回股票 {stock_code} 的详细信息")
-        return stock
+        return success_response(
+            data=stock_data,
+            message="获取股票信息成功"
+        )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"获取股票信息失败: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取股票信息失败")
+        return error_response(message="获取股票信息失败", code=500)
 
 
 @router.get("/{stock_code}/price", response_model=List[StockPriceResponse])
@@ -78,7 +97,7 @@ async def get_stock_price_history(
         service = StockService(db)
         
         # 验证股票是否存在
-        stock = await service.get_stock_by_code(stock_code)
+        stock = await service.get_stock_detail(stock_code)
         if not stock:
             raise HTTPException(status_code=404, detail="股票不存在")
         
@@ -112,7 +131,7 @@ async def get_current_price(
         service = StockService(db)
         
         # 验证股票是否存在
-        stock = await service.get_stock_by_code(stock_code)
+        stock = await service.get_stock_detail(stock_code)
         if not stock:
             raise HTTPException(status_code=404, detail="股票不存在")
         
@@ -140,7 +159,7 @@ async def get_technical_indicators(
         service = StockService(db)
         
         # 验证股票是否存在
-        stock = await service.get_stock_by_code(stock_code)
+        stock = await service.get_stock_detail(stock_code)
         if not stock:
             raise HTTPException(status_code=404, detail="股票不存在")
         
@@ -170,7 +189,7 @@ async def get_fundamental_data(
         service = StockService(db)
         
         # 验证股票是否存在
-        stock = await service.get_stock_by_code(stock_code)
+        stock = await service.get_stock_detail(stock_code)
         if not stock:
             raise HTTPException(status_code=404, detail="股票不存在")
         

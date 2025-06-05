@@ -395,6 +395,57 @@ cache/
 # package-lock.json
 # yarn.lock
 
+# Process output files
+nohup.out
+*.out
+
+# API response cache files (temporary)
+api_response*.json
+
+# TA-Lib compilation artifacts
+ta-lib/
+*.tar.gz
+*.tgz
+
+# Autotools generated files
+aclocal.m4
+autom4te.cache/
+config.guess
+config.status
+config.sub
+configure
+depcomp
+install-sh
+libtool
+ltmain.sh
+missing
+Makefile.in
+*.la
+*.lo
+.libs/
+
+# C/C++ compilation artifacts
+*.o
+*.a
+*.so.*
+*.dylib
+*.dll
+
+# Debug and profiling files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Static analysis
+.clang_complete
+.gcc-flags.json
+
+# Shell script logs
+*.log.*
+install.log
+build.log
+
 # IDE specific files
 *.sublime-project
 *.sublime-workspace

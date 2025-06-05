@@ -54,24 +54,16 @@ def create_error_response(
     details: dict = None,
     request_id: str = None
 ) -> JSONResponse:
-    """创建错误响应"""
-    error_data = {
-        "error": {
-            "message": message,
-            "code": code,
-            "timestamp": None,  # 可以添加时间戳
-        }
-    }
+    """创建错误响应（兼容旧版本）"""
+    from datetime import datetime
+    from backend.app.core.response import error_response
     
-    if details:
-        error_data["error"]["details"] = details
-    
-    if request_id:
-        error_data["error"]["request_id"] = request_id
-    
-    return JSONResponse(
-        status_code=code,
-        content=error_data
+    # 使用新的统一响应格式
+    return error_response(
+        message=message,
+        code=code,
+        data=details,
+        request_id=request_id
     )
 
 

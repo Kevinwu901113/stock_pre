@@ -1,6 +1,36 @@
-# A股量化选股推荐系统
+# 股票策略分析系统
 
-一个基于Web的A股市场量化选股推荐系统，提供每日买入和卖出策略推荐。
+一个基于技术分析和机器学习的股票推荐系统，支持多种策略和模型的组合使用。
+
+## 功能特性
+
+### 📊 数据获取
+- 支持 Tushare 数据源
+- 自动获取股票基本信息、价格数据
+- 定时更新历史数据
+
+### 📈 技术分析策略
+- **移动平均线交叉策略**: 基于短期和长期均线的金叉死叉
+- **RSI策略**: 基于相对强弱指数的超买超卖判断
+- **布林带策略**: 基于价格触及布林带边界的反转信号
+- **综合技术策略**: 结合多个技术指标的复合策略
+  - 收盘价突破5日均线
+  - MACD金叉信号
+  - 换手率高于阈值
+  - 成交量放大确认
+
+### 🤖 机器学习模型
+- **逻辑回归**: 基于线性关系的分类模型
+- **随机森林**: 基于决策树集成的模型
+- **XGBoost**: 梯度提升决策树模型
+- **特征工程**: 包含20+个技术指标特征
+- **模型评估**: AUC、精确率、召回率等指标
+
+### 💡 推荐生成
+- 基于策略信号生成买入/卖出推荐
+- 计算目标价格和止损价格
+- 生成详细的推荐理由
+- 支持AI增强的推荐解释
 
 ## 项目特性
 
@@ -67,40 +97,70 @@ stock/
 ### 1. 环境准备
 
 ```bash
-# 克隆项目
-git clone <repository-url>
-cd stock
+# 安装依赖
+pip install -r requirements.txt
 
-# 设置环境
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+# 配置数据库
+# 编辑 backend/app/core/config.py 设置数据库连接
+
+# 配置Tushare Token
+# 在环境变量中设置 TUSHARE_TOKEN
+export TUSHARE_TOKEN="your_tushare_token"
 ```
 
-### 2. 配置设置
+### 2. 数据初始化
 
 ```bash
-# 复制配置文件
-cp config/api_keys.py.example config/api_keys.py
+# 初始化数据库
+python -c "from backend.app.core.database import init_db; init_db()"
 
-# 编辑配置文件，填入API密钥
-vim config/api_keys.py
+# 获取股票基本信息
+python scripts/update_stock_data.py --init
+
+# 获取历史价格数据
+python scripts/update_stock_data.py --days 365
 ```
 
-### 3. 启动服务
+### 3. 运行策略分析
 
 ```bash
-# 使用Docker启动(推荐)
-docker-compose up -d
+# 生成每日推荐
+python scripts/daily_recommendation.py
 
-# 或手动启动
-./scripts/start.sh
+# 查看推荐结果
+python scripts/view_recommendations.py
 ```
 
-### 4. 访问应用
+### 4. 机器学习模型
 
-- 前端界面: http://localhost:3000
-- 后端API: http://localhost:8000
-- API文档: http://localhost:8000/docs
+#### 训练模型
+
+```bash
+# 训练逻辑回归模型
+python scripts/train_ml_model.py --model logistic_regression
+
+# 训练随机森林模型
+python scripts/train_ml_model.py --model random_forest --test_size 0.3
+
+# 训练XGBoost模型
+python scripts/train_ml_model.py --model xgboost --target_return 0.03
+```
+
+#### 使用模型预测
+
+```bash
+# 预测指定股票
+python scripts/predict_stocks.py --model logistic_regression --stock_codes 000001,000002
+
+# 预测前50只活跃股票
+python scripts/predict_stocks.py --model xgboost --top_n 50 --min_confidence 0.7
+
+# 保存预测结果到数据库
+python scripts/predict_stocks.py --model random_forest --save_to_db
+
+# 导出预测结果到CSV
+python scripts/predict_stocks.py --model logistic_regression --output_file predictions.csv
+```
 
 ## 核心功能
 

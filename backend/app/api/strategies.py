@@ -1,15 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
 from config.database import get_db
-from app.models.stock import StrategyResultResponse, StrategyType
-from app.services.strategy_service import StrategyService
-from app.core.exceptions import ValidationException, StrategyException
+from backend.app.models.stock import StrategyResultResponse, StrategyType
+from backend.app.services.strategy_service import StrategyService
+from backend.app.core.exceptions import ValidationException, StrategyException
 from loguru import logger
 
 router = APIRouter()
+
+
+@router.get("/")
+async def get_strategies(
+    strategy_type: Optional[StrategyType] = Query(None, description="策略类型"),
+    enabled_only: bool = Query(True, description="仅返回启用的策略"),
+    db: Session = Depends(get_db)
+):
+    """获取策略列表（根路径）"""
+    try:
+        service = StrategyService(db)
+        strategies = await service.get_strategy_list(
+            strategy_type=strategy_type,
+            enabled_only=enabled_only
+        )
+        
+        logger.info(f"返回 {len(strategies)} 个策略")
+        return strategies
+        
+    except Exception as e:
+        logger.error(f"获取策略列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取策略列表失败")
 
 
 @router.get("/list")

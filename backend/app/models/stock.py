@@ -58,6 +58,7 @@ class StockPrice(Base):
     high_price = Column(Float)
     low_price = Column(Float)
     close_price = Column(Float)
+    pre_close_price = Column(Float)  # 前收盘价
     volume = Column(Float)  # 成交量
     amount = Column(Float)  # 成交额
     turnover_rate = Column(Float)  # 换手率
@@ -83,12 +84,17 @@ class Recommendation(Base):
     target_price = Column(Float)  # 目标价格
     stop_loss_price = Column(Float)  # 止损价格
     reason = Column(Text)  # 推荐理由
+    signal_type = Column(String(50))  # 信号类型：end_of_day_buy, morning_exit, technical_breakthrough等
+    expected_return = Column(Float)  # 预期收益率
+    holding_period = Column(String(20))  # 建议持有周期：1-3天, 1周, 1个月等
+    risk_level = Column(String(20), default='medium')  # 风险等级：low, medium, high
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     expires_at = Column(DateTime)  # 推荐过期时间
     is_active = Column(Boolean, default=True)
     
     __table_args__ = (
         Index('idx_rec_code_type_date', 'stock_code', 'recommendation_type', 'created_at'),
+        Index('idx_rec_signal_type', 'signal_type', 'created_at'),
     )
 
 
@@ -137,14 +143,15 @@ class StockResponse(StockBase):
     market_cap: Optional[float] = Field(None, description="总市值")
     pe_ratio: Optional[float] = Field(None, description="市盈率")
     pb_ratio: Optional[float] = Field(None, description="市净率")
-    current_price: Optional[float] = Field(None, description="当前价格")
-    price_change: Optional[float] = Field(None, description="价格变化")
-    price_change_percent: Optional[float] = Field(None, description="价格变化百分比")
+    price: Optional[float] = Field(None, alias="current_price", serialization_alias="price", description="当前价格")
+    change: Optional[float] = Field(None, alias="price_change", serialization_alias="change", description="价格变化")
+    change_percent: Optional[float] = Field(None, alias="price_change_percent", serialization_alias="change_percent", description="价格变化百分比")
     volume: Optional[float] = Field(None, description="成交量")
-    turnover_rate: Optional[float] = Field(None, description="换手率")
+    turnover: Optional[float] = Field(None, alias="turnover_rate", serialization_alias="turnover", description="换手率")
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class StockPriceBase(BaseModel):
@@ -155,6 +162,7 @@ class StockPriceBase(BaseModel):
     high_price: Optional[float] = Field(None, description="最高价")
     low_price: Optional[float] = Field(None, description="最低价")
     close_price: Optional[float] = Field(None, description="收盘价")
+    pre_close_price: Optional[float] = Field(None, description="前收盘价")
     volume: Optional[float] = Field(None, description="成交量")
     amount: Optional[float] = Field(None, description="成交额")
     turnover_rate: Optional[float] = Field(None, description="换手率")
@@ -177,10 +185,14 @@ class RecommendationBase(BaseModel):
     stock_code: str = Field(..., description="股票代码")
     recommendation_type: RecommendationType = Field(..., description="推荐类型")
     strategy_name: str = Field(..., description="策略名称")
-    confidence_score: float = Field(..., ge=0, le=1, description="置信度分数")
+    confidence: float = Field(..., alias="confidence_score", ge=0, le=1, description="置信度分数")
     target_price: Optional[float] = Field(None, description="目标价格")
     stop_loss_price: Optional[float] = Field(None, description="止损价格")
     reason: Optional[str] = Field(None, description="推荐理由")
+    signal_type: Optional[str] = Field(None, description="信号类型")
+    expected_return: Optional[float] = Field(None, description="预期收益率")
+    holding_period: Optional[str] = Field(None, description="建议持有周期")
+    risk_level: Optional[str] = Field(None, description="风险等级")
 
 
 class RecommendationCreate(RecommendationBase):
@@ -197,6 +209,7 @@ class RecommendationResponse(RecommendationBase):
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class RecommendationWithStock(RecommendationResponse):
@@ -205,6 +218,10 @@ class RecommendationWithStock(RecommendationResponse):
     current_price: Optional[float] = Field(None, description="当前价格")
     price_change: Optional[float] = Field(None, description="价格变化")
     price_change_percent: Optional[float] = Field(None, description="价格变化百分比")
+    signal_type: Optional[str] = Field(None, description="信号类型")
+    expected_return: Optional[float] = Field(None, description="预期收益率")
+    holding_period: Optional[str] = Field(None, description="建议持有周期")
+    risk_level: Optional[str] = Field(None, description="风险等级")
 
 
 class StrategyResultBase(BaseModel):

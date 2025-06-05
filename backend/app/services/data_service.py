@@ -8,7 +8,7 @@ import pandas as pd
 import io
 from pathlib import Path
 
-from app.models.stock import Stock, StockPrice
+from backend.app.models.stock import Stock, StockPrice
 from config.database import cache_manager
 from config.settings import settings
 from loguru import logger

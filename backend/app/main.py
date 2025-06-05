@@ -10,9 +10,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from config.settings import settings
 from config.database import init_database
-from app.api import recommendations, stocks, strategies, data, stats
-from app.core.exceptions import setup_exception_handlers
-from app.core.middleware import setup_middleware
+from backend.app.api import recommendations, stocks, strategies, data, stats, recommendation_generator
+from backend.app.api import stocks_search, stocks_kline, stocks_indicators
+from backend.app.core.exceptions import setup_exception_handlers
+from backend.app.core.middleware import setup_middleware
 from loguru import logger
 
 
@@ -59,6 +60,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"数据库初始化失败: {e}")
     
+    # 启动定时任务调度器
+    try:
+        from backend.app.core.scheduler import start_scheduler
+        await start_scheduler()
+        logger.info("定时任务调度器启动成功")
+    except Exception as e:
+        logger.error(f"定时任务调度器启动失败: {e}")
+    
     # 其他启动任务
     logger.info("应用启动完成")
 
@@ -67,6 +76,16 @@ async def startup_event():
 async def shutdown_event():
     """应用关闭事件"""
     logger.info("应用正在关闭...")
+    
+    # 停止定时任务调度器
+    try:
+        from backend.app.core.scheduler import stop_scheduler
+        await stop_scheduler()
+        logger.info("定时任务调度器已停止")
+    except Exception as e:
+        logger.error(f"停止定时任务调度器失败: {e}")
+    
+    logger.info("应用关闭完成")
 
 
 # 健康检查
@@ -100,9 +119,36 @@ app.include_router(
 )
 
 app.include_router(
+    recommendation_generator.router,
+    prefix="/recommendations",
+    tags=["推荐生成"]
+)
+
+app.include_router(
     stocks.router,
     prefix="/stocks",
     tags=["股票"]
+)
+
+# 注册股票搜索路由
+app.include_router(
+    stocks_search.router,
+    prefix="/stocks",
+    tags=["股票搜索"]
+)
+
+# 注册股票K线路由
+app.include_router(
+    stocks_kline.router,
+    prefix="/stocks",
+    tags=["股票K线"]
+)
+
+# 注册股票技术指标路由
+app.include_router(
+    stocks_indicators.router,
+    prefix="/stocks",
+    tags=["股票技术指标"]
 )
 
 app.include_router(

@@ -7,7 +7,7 @@ import asyncio
 import importlib
 import inspect
 
-from app.models.stock import (
+from backend.app.models.stock import (
     StrategyResult, Stock, StockPrice, Recommendation,
     StrategyResultResponse, RecommendationType
 )
@@ -171,6 +171,87 @@ class StrategyService:
         except Exception as e:
             logger.error(f"更新策略配置失败: {str(e)}")
             raise
+    
+    def execute_strategy_sync(
+        self,
+        strategy_name: str,
+        stock_codes: Optional[List[str]] = None,
+        parameters: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """同步执行策略（供调度器使用）"""
+        try:
+            # 简化的策略执行逻辑
+            if strategy_name == "end_of_day":
+                return self._execute_end_of_day_strategy_sync(stock_codes, parameters)
+            elif strategy_name == "morning_exit":
+                return self._execute_morning_exit_strategy_sync(stock_codes, parameters)
+            else:
+                logger.warning(f"未知策略类型: {strategy_name}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"同步执行策略失败: {str(e)}")
+            return []
+    
+    def _execute_end_of_day_strategy_sync(self, stock_codes: List[str], parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """同步执行尾盘策略"""
+        results = []
+        
+        try:
+            # 简化的尾盘策略逻辑
+            for stock_code in stock_codes[:10]:  # 限制处理数量
+                # 模拟策略分析
+                confidence = 0.7  # 模拟置信度
+                
+                if confidence >= parameters.get('min_confidence', 0.6):
+                    results.append({
+                        'stock_code': stock_code,
+                        'signal': 'buy',
+                        'confidence': confidence,
+                        'target_price': None,
+                        'stop_loss': None,
+                        'reason': '尾盘买入信号',
+                        'signal_type': 'end_of_day',
+                        'expected_return': 0.05,
+                        'holding_period': 1,
+                        'risk_level': 'medium'
+                    })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"执行尾盘策略失败: {str(e)}")
+            return []
+    
+    def _execute_morning_exit_strategy_sync(self, stock_codes: List[str], parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """同步执行早盘策略"""
+        results = []
+        
+        try:
+            # 简化的早盘策略逻辑
+            for stock_code in stock_codes:
+                # 模拟策略分析
+                confidence = 0.6  # 模拟置信度
+                
+                if confidence >= parameters.get('min_confidence', 0.6):
+                    results.append({
+                        'stock_code': stock_code,
+                        'signal': 'sell',
+                        'confidence': confidence,
+                        'target_price': None,
+                        'stop_loss': None,
+                        'reason': '早盘卖出信号',
+                        'signal_type': 'morning_exit',
+                        'expected_return': 0.03,
+                        'holding_period': 0,
+                        'risk_level': 'low'
+                    })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"执行早盘策略失败: {str(e)}")
+            return []
     
     async def execute_strategy(
         self,

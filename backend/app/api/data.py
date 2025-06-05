@@ -6,8 +6,8 @@ import pandas as pd
 import io
 
 from config.database import get_db
-from app.services.data_service import DataService
-from app.core.exceptions import ValidationException, DataSourceException
+from backend.app.services.data_service import DataService
+from backend.app.core.exceptions import ValidationException, DataSourceException
 from loguru import logger
 
 router = APIRouter()
@@ -178,7 +178,7 @@ async def get_fundamental_data(
         raise HTTPException(status_code=500, detail="获取基本面数据失败")
 
 
-@router.get("/market/overview")
+@router.get("/market-overview")
 async def get_market_overview(
     db: Session = Depends(get_db)
 ):
@@ -377,3 +377,21 @@ async def get_data_quality_report(
     except Exception as e:
         logger.error(f"获取数据质量报告失败: {str(e)}")
         raise HTTPException(status_code=500, detail="获取数据质量报告失败")
+
+
+@router.get("/industries")
+async def get_industries(
+    db: Session = Depends(get_db)
+):
+    """获取行业列表"""
+    try:
+        from backend.app.services.stock_service import StockService
+        service = StockService(db)
+        industries = await service.get_industries()
+        
+        logger.info(f"返回 {len(industries)} 个行业")
+        return industries
+        
+    except Exception as e:
+        logger.error(f"获取行业列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取行业列表失败")

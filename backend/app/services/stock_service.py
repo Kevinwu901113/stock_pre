@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 import json
 import asyncio
 
-from app.models.stock import (
+from backend.app.models.stock import (
     Stock, StockPrice, StockResponse, StockPriceResponse,
     StockListResponse, MarketOverview, TechnicalIndicators
 )
@@ -88,11 +88,11 @@ class StockService:
                     market_cap=price_info.get('market_cap'),
                     pe_ratio=price_info.get('pe_ratio'),
                     pb_ratio=price_info.get('pb_ratio'),
-                    current_price=price_info.get('current_price'),
-                    price_change=price_info.get('price_change'),
-                    price_change_percent=price_info.get('price_change_percent'),
+                    price=price_info.get('current_price'),
+                    change=price_info.get('price_change'),
+                    change_percent=price_info.get('price_change_percent'),
                     volume=price_info.get('volume'),
-                    turnover_rate=price_info.get('turnover_rate')
+                    turnover=price_info.get('turnover_rate')
                 )
                 stock_responses.append(stock_data)
             
@@ -128,14 +128,19 @@ class StockService:
             price_info = await self._get_current_price_info(stock_code)
             
             stock_data = StockResponse(
+                id=stock.id,
                 code=stock.code,
                 name=stock.name,
                 industry=stock.industry,
                 market=stock.market,
+                sector=stock.sector,
                 list_date=stock.list_date,
-                market_cap=stock.market_cap,
-                pe_ratio=stock.pe_ratio,
-                pb_ratio=stock.pb_ratio,
+                is_active=stock.is_active,
+                created_at=stock.created_at,
+                updated_at=stock.updated_at,
+                market_cap=price_info.get('market_cap'),
+                pe_ratio=price_info.get('pe_ratio'),
+                pb_ratio=price_info.get('pb_ratio'),
                 current_price=price_info.get('current_price'),
                 price_change=price_info.get('price_change'),
                 price_change_percent=price_info.get('price_change_percent'),
