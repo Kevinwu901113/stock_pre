@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from config.settings import settings
 from config.database import init_database
-from app.api import recommendations, stocks, strategies, data
+from app.api import recommendations, stocks, strategies, data, stats
 from app.core.exceptions import setup_exception_handlers
 from app.core.middleware import setup_middleware
 from loguru import logger
@@ -95,26 +95,32 @@ async def root():
 # 注册API路由
 app.include_router(
     recommendations.router,
-    prefix="/api/v1/recommendations",
+    prefix="/recommendations",
     tags=["推荐"]
 )
 
 app.include_router(
     stocks.router,
-    prefix="/api/v1/stocks",
+    prefix="/stocks",
     tags=["股票"]
 )
 
 app.include_router(
     strategies.router,
-    prefix="/api/v1/strategies",
+    prefix="/strategies",
     tags=["策略"]
 )
 
 app.include_router(
     data.router,
-    prefix="/api/v1/data",
+    prefix="/data",
     tags=["数据"]
+)
+
+app.include_router(
+    stats.router,
+    prefix="/stats",
+    tags=["统计"]
 )
 
 
