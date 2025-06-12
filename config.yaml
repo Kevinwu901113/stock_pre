@@ -1,0 +1,247 @@
+# 股票推荐系统统一配置文件
+# 支持不同股票池、时间段、因子组合的可扩展配置
+
+# 数据源配置
+data_source:
+  provider: "akshare"  # 数据提供商
+  retry_times: 3       # 重试次数
+  retry_delay: 2       # 重试延迟(秒)
+  timeout: 30          # 请求超时(秒)
+  cache_enabled: true  # 是否启用内存缓存
+  cache_expire_minutes: 30  # 内存缓存过期时间(分钟)
+  
+  # 文件缓存配置
+  file_cache_enabled: true    # 是否启用文件缓存
+  cache_dir: "data_cache"     # 缓存目录路径
+  cache_expire_days: 7        # 文件缓存过期天数
+  auto_clean_cache: true      # 是否自动清理过期缓存
+
+# 股票池配置 - 支持多种股票池配置
+stock_universe:
+  # 默认股票池配置
+  default:
+    max_stocks_to_analyze: 500    # 最大分析股票数量
+    min_price: 3.0               # 最低价格过滤
+    max_price: 200.0             # 最高价格过滤
+    min_market_cap: 50           # 最小市值(亿元)
+    max_pe_ratio: 100            # 最大市盈率
+    exclude_st: true             # 排除ST股票
+    exclude_new_stocks: true     # 排除新股(上市不足30天)
+    exclude_boards:              # 排除的板块
+      - "688"  # 科创板
+      - "300"  # 创业板
+  
+  # 保守型股票池
+  conservative:
+    max_stocks_to_analyze: 300
+    min_price: 5.0
+    max_price: 100.0
+    min_market_cap: 100
+    max_pe_ratio: 30
+    exclude_st: true
+    exclude_new_stocks: true
+    exclude_boards: ["688", "300"]
+  
+  # 激进型股票池
+  aggressive:
+    max_stocks_to_analyze: 800
+    min_price: 2.0
+    max_price: 300.0
+    min_market_cap: 20
+    max_pe_ratio: 200
+    exclude_st: false
+    exclude_new_stocks: false
+    exclude_boards: []
+
+# 因子权重配置 - 支持多种因子组合策略
+factor_weights:
+  # 默认均衡策略
+  default:
+    # 动量因子权重 (总权重: 0.35)
+    momentum_5d: 0.10      # 5日动量
+    momentum_10d: 0.10     # 10日动量
+    momentum_20d: 0.10     # 20日动量
+    rsi: 0.05              # RSI指标
+    
+    # 成交量因子权重 (总权重: 0.20)
+    volume_ratio: 0.08     # 成交量比率
+    volume_spike: 0.07     # 成交量突增
+    turnover_rate: 0.05    # 换手率
+    
+    # 资金流向因子权重 (总权重: 0.20)
+    main_inflow_score: 0.10    # 主力资金净流入评分
+    large_inflow_score: 0.05   # 大单资金净流入评分
+    capital_strength: 0.05     # 综合资金强度
+    
+    # 技术指标权重 (总权重: 0.08)
+    macd: 0.05             # MACD指标
+    bollinger_position: 0.03   # 布林带位置
+    
+    # 情绪因子权重 (总权重: 0.17)
+    news_sentiment_score: 0.08     # 新闻情绪评分
+    market_sentiment_score: 0.04   # 市场情绪评分
+    overall_sentiment: 0.05        # 综合情绪评分
+    
+    # 风险因子权重 (总权重: -0.02，负权重表示风险)
+    volatility_20d: -0.05      # 20日波动率(负权重)
+    price_stability: 0.03      # 价格稳定性
+    
+    # 其他因子
+    change_pct: 0.02          # 当日涨跌幅
+  
+  # 动量策略 - 重点关注价格趋势
+  momentum_focused:
+    momentum_5d: 0.15
+    momentum_10d: 0.15
+    momentum_20d: 0.15
+    rsi: 0.10
+    volume_ratio: 0.10
+    volume_spike: 0.10
+    turnover_rate: 0.05
+    main_inflow_score: 0.05
+    large_inflow_score: 0.03
+    capital_strength: 0.02
+    macd: 0.08
+    bollinger_position: 0.02
+    volatility_20d: -0.10
+    price_stability: 0.00
+    change_pct: 0.05
+  
+  # 资金流策略 - 重点关注资金流向
+  capital_flow_focused:
+    momentum_5d: 0.05
+    momentum_10d: 0.05
+    momentum_20d: 0.05
+    rsi: 0.03
+    volume_ratio: 0.12
+    volume_spike: 0.12
+    turnover_rate: 0.08
+    main_inflow_score: 0.20
+    large_inflow_score: 0.15
+    capital_strength: 0.15
+    macd: 0.02
+    bollinger_position: 0.02
+    news_sentiment_score: 0.05
+    market_sentiment_score: 0.03
+    overall_sentiment: 0.02
+    volatility_20d: -0.03
+    price_stability: 0.05
+    change_pct: 0.01
+  
+  # 稳健策略 - 重点关注风险控制
+  conservative:
+    momentum_5d: 0.05
+    momentum_10d: 0.08
+    momentum_20d: 0.12
+    rsi: 0.05
+    volume_ratio: 0.05
+    volume_spike: 0.03
+    turnover_rate: 0.07
+    main_inflow_score: 0.08
+    large_inflow_score: 0.05
+    capital_strength: 0.07
+    macd: 0.05
+    bollinger_position: 0.05
+    news_sentiment_score: 0.03
+    market_sentiment_score: 0.02
+    overall_sentiment: 0.03
+    volatility_20d: -0.15
+    price_stability: 0.15
+    change_pct: 0.01
+
+# 时间段配置 - 支持不同的分析时间窗口
+time_periods:
+  # 短期分析
+  short_term:
+    history_days: 20
+    momentum_periods: [3, 5, 10]
+    volatility_period: 10
+    ma_periods: [5, 10]
+  
+  # 中期分析
+  medium_term:
+    history_days: 60
+    momentum_periods: [5, 10, 20]
+    volatility_period: 20
+    ma_periods: [5, 10, 20]
+  
+  # 长期分析
+  long_term:
+    history_days: 120
+    momentum_periods: [10, 20, 60]
+    volatility_period: 60
+    ma_periods: [10, 20, 60]
+
+# 推荐配置
+recommendation:
+  top_recommendations: 20        # 推荐股票数量
+  min_score_threshold: 0.6       # 最低评分阈值
+  max_single_stock_weight: 0.1   # 单只股票最大权重
+  sector_diversification: true   # 是否进行行业分散
+
+# 卖出决策配置
+sell_decision:
+  profit_threshold: 3.0      # 止盈阈值(%)
+  loss_threshold: -3.0       # 止损阈值(%)
+  hold_days_limit: 5         # 最大持有天数
+  volume_check: true         # 是否检查成交量
+  technical_check: true      # 是否进行技术面检查
+  min_volume_ratio: 0.5      # 最小成交量比率
+
+# 输出配置
+output:
+  result_dir: "result"       # 结果输出目录
+  backup_days: 30            # 结果备份天数
+  file_format: "json"        # 输出文件格式
+  include_details: true      # 是否包含详细信息
+
+# 调度配置
+scheduler:
+  buy_time: "14:45"          # 买入推荐时间
+  sell_time: "09:45"         # 卖出建议时间
+  timezone: "Asia/Shanghai"  # 时区
+  enable_weekend: false      # 是否在周末运行
+
+# 日志配置
+logging:
+  level: "INFO"              # 日志级别
+  file_path: "result/stock_recommendation.log"  # 日志文件路径
+  max_file_size: "10MB"      # 最大文件大小
+  backup_count: 5            # 备份文件数量
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# 风险控制配置
+risk_control:
+  max_position_per_stock: 0.05    # 单只股票最大仓位
+  max_sector_exposure: 0.30       # 单个行业最大敞口
+  max_total_risk: 0.15            # 最大总风险敞口
+  stop_loss_threshold: -0.08      # 止损阈值
+  profit_taking_threshold: 0.15   # 止盈阈值
+  max_drawdown_threshold: -0.10   # 最大回撤阈值
+
+# 机器学习模型配置
+ml_model:
+  model_path: "models/lightgbm_model.pkl"      # 模型文件路径
+  scaler_path: "models/scaler.pkl"             # 标准化器路径
+  feature_names_path: "models/feature_names.pkl" # 特征名称路径
+  max_training_stocks: 500                     # 最大训练股票数量
+  
+  # LightGBM参数
+  lgb_params:
+    objective: "binary"
+    metric: "binary_logloss"
+    boosting_type: "gbdt"
+    num_leaves: 31
+    learning_rate: 0.05
+    feature_fraction: 0.9
+    bagging_fraction: 0.8
+    bagging_freq: 5
+    verbose: -1
+    random_state: 42
+
+# 性能配置
+performance:
+  batch_size: 50             # 批处理大小
+  parallel_workers: 4        # 并行工作线程数
+  cache_enabled: true        # 是否启用缓存
+  cache_ttl: 3600           # 缓存过期时间(秒)

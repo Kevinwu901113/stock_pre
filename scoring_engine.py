@@ -12,17 +12,60 @@ import logging
 import yaml
 import os
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ScoringEngine:
     """打分引擎类"""
     
-    def __init__(self, config_path: str = None):
-        self.config_path = config_path or "factor_config.yaml"
-        self.factor_weights = self.load_factor_config()
+    def __init__(self, config_path: str = "config.yaml", factor_strategy: str = 'default', stock_universe: str = 'default'):
+        """初始化打分引擎
         
-    def load_factor_config(self) -> Dict[str, float]:
+        Args:
+            config_path: 配置文件路径
+            factor_strategy: 因子策略名称
+            stock_universe: 股票池名称
+        """
+        self.config = self._load_config(config_path)
+        self.factor_strategy = factor_strategy
+        self.stock_universe = stock_universe
+        
+        # 根据策略选择因子权重
+        factor_weights_config = self.config.get('factor_weights', {})
+        self.factor_weights = factor_weights_config.get(factor_strategy, factor_weights_config.get('default', {}))
+        
+        # 根据股票池选择推荐配置
+        recommendation_config = self.config.get('recommendation', {})
+        stock_pools = self.config.get('stock_pools', {})
+        pool_config = stock_pools.get(stock_universe, stock_pools.get('default', {}))
+        
+        # 合并推荐配置和股票池配置
+        self.recommendation_config = {**recommendation_config, **pool_config.get('recommendation', {})}
+        self.risk_control_config = self.config.get('risk_control', {})
+        
+        # 推荐配置
+        self.top_recommendations = self.recommendation_config.get('top_recommendations', 20)
+        self.min_score_threshold = self.recommendation_config.get('min_score_threshold', 0.6)
+        self.sector_diversification = self.recommendation_config.get('sector_diversification', True)
+        
+        # 风险控制配置
+        self.max_daily_recommendations = self.risk_control_config.get('max_daily_recommendations', 20)
+        self.min_liquidity_threshold = self.risk_control_config.get('min_liquidity_threshold', 1000000)
+        self.volatility_limit = self.risk_control_config.get('volatility_limit', 0.1)
+        
+        # 如果没有配置因子权重，使用默认权重
+        if not self.factor_weights:
+            self.factor_weights = self._get_default_factor_weights()
+    
+    def _load_config(self, config_path: str) -> Dict:
+        """加载配置文件"""
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            logger.error(f"加载配置文件失败: {e}，使用默认配置")
+            return {}
+        
+    def _get_default_factor_weights(self) -> Dict[str, float]:
         """加载因子配置"""
         default_weights = {
             # 动量因子权重
@@ -58,18 +101,7 @@ class ScoringEngine:
             'change_pct': 0.02
         }
         
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    config = yaml.safe_load(f)
-                    if 'factor_weights' in config:
-                        default_weights.update(config['factor_weights'])
-                        logger.info(f"从{self.config_path}加载因子配置")
-            except Exception as e:
-                logger.warning(f"加载配置文件失败，使用默认配置: {e}")
-        else:
-            logger.info("配置文件不存在，使用默认因子权重")
-            
+        logger.info("使用默认因子权重")
         return default_weights
     
     def _is_valid_number(self, value) -> bool:
@@ -88,71 +120,36 @@ class ScoringEngine:
         except (ValueError, TypeError):
             return False
     
-    def normalize_features(self, all_features: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
-        """特征标准化"""
-        if not all_features:
+    def normalize_features(self, features_dict: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+        """标准化特征 - 支持动态因子名称"""
+        if not features_dict:
             return {}
         
-        # 获取所有特征名称
-        feature_names = set()
-        for features in all_features.values():
-            feature_names.update(features.keys())
-        
-        # 计算每个特征的统计信息
-        feature_stats = {}
-        for feature_name in feature_names:
-            values = []
-            for features in all_features.values():
-                if feature_name in features:
-                    value = features[feature_name]
-                    # 安全的数值检查
-                    if self._is_valid_number(value):
-                        values.append(float(value))
-            
-            if values:
-                feature_stats[feature_name] = {
-                    'mean': np.mean(values),
-                    'std': np.std(values),
-                    'min': np.min(values),
-                    'max': np.max(values)
-                }
-            else:
-                feature_stats[feature_name] = {'mean': 0, 'std': 1, 'min': 0, 'max': 1}
-        
-        # 标准化特征
-        normalized_features = {}
-        for stock_code, features in all_features.items():
-            normalized_features[stock_code] = {}
-            
+        # 收集所有特征值
+        all_features = {}
+        for stock_code, features in features_dict.items():
             for feature_name, value in features.items():
-                # 检查是否为有效数值
-                if not self._is_valid_number(value):
-                    normalized_features[stock_code][feature_name] = 50.0  # 使用中性值
-                    continue
-                
-                # 转换为浮点数
-                try:
-                    numeric_value = float(value)
-                except (ValueError, TypeError):
-                    normalized_features[stock_code][feature_name] = 50.0
-                    continue
-                
-                # 获取统计信息
-                if feature_name not in feature_stats:
-                    normalized_features[stock_code][feature_name] = 50.0
-                    continue
-                    
+                if feature_name not in all_features:
+                    all_features[feature_name] = []
+                all_features[feature_name].append(value)
+        
+        # 计算每个特征的均值和标准差
+        feature_stats = {}
+        for feature_name, values in all_features.items():
+            values = np.array(values)
+            feature_stats[feature_name] = {
+                'mean': np.mean(values),
+                'std': np.std(values) if np.std(values) > 0 else 1
+            }
+        
+        # 标准化
+        normalized_features = {}
+        for stock_code, features in features_dict.items():
+            normalized_features[stock_code] = {}
+            for feature_name, value in features.items():
                 stats = feature_stats[feature_name]
-                
-                # 使用Z-score标准化，但限制在[-3, 3]范围内
-                if stats['std'] > 0:
-                    normalized_value = (numeric_value - stats['mean']) / stats['std']
-                    normalized_value = max(-3, min(3, normalized_value))
-                else:
-                    normalized_value = 0
-                
-                # 转换到[0, 100]范围
-                normalized_features[stock_code][feature_name] = (normalized_value + 3) * 100 / 6
+                normalized_value = (value - stats['mean']) / stats['std']
+                normalized_features[stock_code][feature_name] = normalized_value
         
         return normalized_features
     
@@ -386,37 +383,3 @@ class ScoringEngine:
             formatted_results.append(result)
         
         return formatted_results
-
-if __name__ == "__main__":
-    # 测试代码
-    engine = ScoringEngine()
-    
-    # 创建测试特征数据
-    test_features = {
-        '000001': {
-            'momentum_5d': 3.2, 'momentum_10d': 5.1, 'momentum_20d': 8.3,
-            'rsi': 65, 'volume_ratio': 2.5, 'volume_spike': 1,
-            'main_inflow_score': 75, 'capital_strength': 68,
-            'news_sentiment_score': 72, 'overall_sentiment': 70,
-            'volatility_20d': 25, 'current_price': 15.68, 'change_pct': 2.1,
-            'stock_name': '平安银行'
-        },
-        '000002': {
-            'momentum_5d': -1.2, 'momentum_10d': 1.1, 'momentum_20d': -2.3,
-            'rsi': 45, 'volume_ratio': 1.2, 'volume_spike': 0,
-            'main_inflow_score': 45, 'capital_strength': 48,
-            'news_sentiment_score': 52, 'overall_sentiment': 50,
-            'volatility_20d': 35, 'current_price': 28.45, 'change_pct': -0.8,
-            'stock_name': '万科A'
-        }
-    }
-    
-    scored_stocks = engine.score_stocks(test_features)
-    top_stocks = engine.get_top_recommendations(scored_stocks, 10)
-    formatted_results = engine.format_recommendation_result(top_stocks)
-    
-    print("推荐结果:")
-    for result in formatted_results:
-        print(f"排名{result['rank']}: {result['stock_name']}({result['stock_code']}) - 得分: {result['total_score']}")
-        print(f"  推荐理由: {result['recommendation_reason']}")
-        print()

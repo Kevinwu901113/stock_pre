@@ -1,0 +1,76 @@
+# 因子启用配置文件
+# 通过设置true/false来控制各个因子是否参与计算
+
+# 基础动量因子
+momentum_factors:
+  momentum_5d: true          # 5日动量
+  momentum_10d: true         # 10日动量
+  momentum_20d: true         # 20日动量
+  momentum_5d_new: true      # 近5日涨跌幅（新增）
+  rsi: true                  # RSI指标
+
+# 成交量因子
+volume_factors:
+  volume_ratio: true         # 成交量比率
+  volume_spike: true         # 成交量突增
+  turnover_rate: true        # 换手率
+  volume_ratio_new: true     # 量比（新增）
+
+# 资金流向因子
+capital_flow_factors:
+  main_inflow_score: true    # 主力资金净流入评分
+  large_inflow_score: true   # 大单资金净流入评分
+  capital_strength: true     # 综合资金强度
+  main_capital_inflow: true  # 主力资金净流入（标准化，新增）
+
+# 技术指标因子
+technical_factors:
+  macd: true                 # MACD指标
+  macd_diff: true            # MACD差值（新增）
+  bollinger_position: true   # 布林带位置
+  kdj_golden_cross: true     # KDJ金叉（新增）
+  ma_slope_5d: true          # 5日均线斜率（新增）
+  ma_slope_10d: true         # 10日均线斜率（新增）
+
+# 情绪因子
+sentiment_factors:
+  news_sentiment_score: true     # 新闻情绪评分
+  market_sentiment_score: true   # 市场情绪评分
+  overall_sentiment: true        # 综合情绪评分
+
+# 风险因子
+risk_factors:
+  volatility_20d: true       # 20日波动率
+  price_stability: true      # 价格稳定性
+
+# 市场状态因子
+market_state_factors:
+  limit_up_yesterday: true   # 前一日涨停状态（新增）
+  sector_performance: true   # 所属行业表现（新增）
+
+# 基础价格因子
+basic_factors:
+  current_price: true        # 当前价格
+  change_pct: true           # 当日涨跌幅
+  amplitude: true            # 振幅
+
+# 全局设置
+global_settings:
+  # 是否启用因子标准化
+  enable_normalization: true
+  
+  # 缺失数据处理方式
+  missing_data_strategy: "zero"  # zero: 补零, skip: 跳过, mean: 均值填充
+  
+  # 异常值处理
+  outlier_handling:
+    enable: true
+    method: "clip"  # clip: 截断, remove: 移除
+    lower_percentile: 1
+    upper_percentile: 99
+  
+  # 因子有效性检查
+  factor_validation:
+    enable: true
+    min_data_points: 10  # 最少数据点数
+    max_missing_ratio: 0.3  # 最大缺失比例

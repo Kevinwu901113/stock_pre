@@ -25,6 +25,7 @@ plotly>=5.10.0
 
 # 机器学习（可选，用于模型优化）
 scikit-learn>=1.1.0
+lightgbm>=3.3.0
 
 # 数据库支持（可选）
 sqlalchemy>=1.4.0
@@ -42,6 +43,10 @@ python-dateutil>=2.8.0
 
 # 数值计算优化
 numba>=0.56.0
+
+# 技术分析库
+TA-Lib>=0.4.25
+pandas-ta>=0.3.14b
 
 # 并发处理
 # concurrent-futures已内置在Python 3.2+中，无需单独安装

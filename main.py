@@ -1,402 +1,384 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-主程序入口
-功能：调度上述模块，输出推荐结果与卖出建议
+股票推荐系统主程序
+整合数据获取、特征提取、评分引擎和结果输出模块
 """
 
 import os
-import json
+import sys
 import logging
+import argparse
 from datetime import datetime, timedelta
-from typing import Dict, List
-import schedule
-import time
+from typing import Dict, List, Optional
+
+# 添加当前目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_fetcher import DataFetcher
 from feature_extractor import FeatureExtractor
 from scoring_engine import ScoringEngine
-from sell_decision import SellDecision
-
-# 确保结果目录存在
-os.makedirs('result', exist_ok=True)
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('result/stock_recommendation.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ],
-    force=True  # 强制重新配置日志
-)
-logger = logging.getLogger(__name__)
+from result_writer import ResultWriter
+from ml_predictor import MLPredictor
 
 class StockRecommendationSystem:
     """股票推荐系统主类"""
     
-    def __init__(self):
-        self.data_fetcher = DataFetcher()
-        self.feature_extractor = FeatureExtractor()
-        self.scoring_engine = ScoringEngine()
-        self.sell_decision = SellDecision()
+    def __init__(self, config_path: str = 'config.yaml', 
+                 stock_universe: str = 'default',
+                 factor_strategy: str = 'default',
+                 time_period: str = 'default'):
+        """
+        初始化股票推荐系统
         
-        # 系统配置
-        self.config = {
-            'max_stocks_to_analyze': 500,  # 最大分析股票数量
-            'top_recommendations': 20,     # 推荐股票数量
-            'min_price': 3.0,             # 最低价格过滤
-            'max_price': 200.0,           # 最高价格过滤
-            'exclude_st': True,           # 排除ST股票
-            'exclude_new_stocks': True,   # 排除新股（上市不足30天）
-        }
+        Args:
+            config_path: 配置文件路径
+            stock_universe: 股票池策略 (default, conservative, aggressive)
+            factor_strategy: 因子策略 (default, momentum_focused, capital_flow_focused, conservative)
+            time_period: 时间周期 (short_term, medium_term, long_term)
+        """
+        self.config_path = config_path
+        self.stock_universe = stock_universe
+        self.factor_strategy = factor_strategy
+        self.time_period = time_period
+        self.config = self._load_config()
+        
+        # 初始化各个模块，传入策略参数
+        self.data_fetcher = DataFetcher(config_path, stock_universe, time_period)
+        self.feature_extractor = FeatureExtractor(config_path, factor_strategy, time_period)
+        self.scoring_engine = ScoringEngine(config_path, factor_strategy, stock_universe)
+        self.result_writer = ResultWriter(config_path)
+        self.ml_predictor = MLPredictor(config_path)  # 机器学习预测器
+        # self.sell_decision = SellDecision(config_path)  # 注释掉未定义的模块
+        
+        # 设置日志
+        self._setup_logging()
+        
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("股票推荐系统初始化完成")
     
-    def filter_stock_universe(self, stock_list: List[Dict]) -> List[str]:
-        """筛选股票池"""
-        logger.info("开始筛选股票池...")
-        
-        filtered_codes = []
-        
-        for stock in stock_list:
-            stock_code = stock.get('code', '')
-            stock_name = stock.get('name', '')
-            
-            # 基本过滤条件
-            if not stock_code or not stock_name:
-                continue
-            
-            # 排除ST股票
-            if self.config['exclude_st'] and ('ST' in stock_name or '*ST' in stock_name):
-                continue
-            
-            # 排除科创板和创业板（可选）
-            if stock_code.startswith('688') or stock_code.startswith('300'):
-                continue
-            
-            filtered_codes.append(stock_code)
-        
-        # 限制分析数量
-        if len(filtered_codes) > self.config['max_stocks_to_analyze']:
-            filtered_codes = filtered_codes[:self.config['max_stocks_to_analyze']]
-        
-        logger.info(f"筛选后股票池包含{len(filtered_codes)}只股票")
-        return filtered_codes
-    
-    def generate_buy_recommendations(self) -> Dict:
-        """生成买入推荐"""
-        logger.info("="*50)
-        logger.info("开始生成买入推荐")
-        logger.info("="*50)
-        
+    def _load_config(self) -> Dict:
+        """加载配置文件"""
         try:
-            # 1. 获取股票列表
-            logger.info("步骤1: 获取股票列表")
-            try:
-                stock_list = self.data_fetcher.get_stock_list()
-                if stock_list.empty:
-                    raise Exception("获取到的股票列表为空")
-            except Exception as e:
-                raise Exception(f"获取股票列表失败: {e}")
+            import yaml
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            self.logger.error(f"加载配置文件失败: {e}，使用默认配置")
+            return {}
+    
+    def _setup_logging(self):
+        """设置日志配置"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('stock_recommendation.log', encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+    
+    def run_recommendation(self, 
+                          top_n: int = 20,
+                          save_results: bool = True,
+                          export_excel: bool = False) -> List[Dict]:
+        """
+        运行完整的股票推荐流程
+        
+        Args:
+            top_n: 推荐股票数量
+            save_results: 是否保存结果到文件
+            export_excel: 是否导出Excel文件
             
-            # 转换为字典列表
-            stock_list_dict = stock_list.to_dict('records')
+        Returns:
+            推荐结果列表
+        """
+        try:
+            self.logger.info(f"开始运行股票推荐系统 - 股票池: {self.stock_universe}, 因子策略: {self.factor_strategy}, 时间周期: {self.time_period}")
             
-            # 2. 筛选股票池
-            logger.info("步骤2: 筛选股票池")
-            filtered_codes = self.filter_stock_universe(stock_list_dict)
+            # 1. 获取股票数据
+            self.logger.info("步骤1: 获取股票数据")
+            stock_list = self.data_fetcher.get_stock_list()
+            self.logger.info(f"获取到{len(stock_list)}只股票")
             
-            if not filtered_codes:
-                raise Exception("筛选后股票池为空")
+            # 过滤股票池
+            filtered_stocks = self.data_fetcher.filter_stock_universe(stock_list)
+            self.logger.info(f"过滤后剩余{len(filtered_stocks)}只股票")
             
-            # 3. 获取数据
-            logger.info("步骤3: 获取股票数据")
-            try:
-                all_stock_data = self.data_fetcher.get_all_data(filtered_codes)
-                
-                if not all_stock_data:
-                    raise Exception("无法获取任何股票数据")
-                    
-                logger.info(f"成功获取{len(all_stock_data)}只股票的数据")
-                
-            except Exception as e:
-                raise Exception(f"获取股票数据失败: {e}")
+            # 获取所有数据
+            all_data = self.data_fetcher.get_all_data(filtered_stocks)
+            self.logger.info(f"成功获取{len(all_data)}只股票的完整数据")
             
-            # 添加股票名称信息
-            stock_name_map = {stock['code']: stock['name'] for stock in stock_list_dict}
-            for code, data in all_stock_data.items():
-                if 'realtime' in data:
-                    data['realtime']['stock_name'] = stock_name_map.get(code, '')
+            # 2. 特征提取
+            self.logger.info("步骤2: 提取股票特征")
+            all_features = self.feature_extractor.batch_extract_features(all_data)
+            self.logger.info(f"成功提取{len(all_features)}只股票的特征")
             
-            # 4. 提取特征
-            logger.info("步骤4: 提取特征")
-            all_features = self.feature_extractor.batch_extract_features(all_stock_data)
-            
-            if not all_features:
-                raise Exception("特征提取失败")
-            
-            # 添加股票名称到特征中
-            for code, features in all_features.items():
-                features['stock_name'] = stock_name_map.get(code, '')
-            
-            # 5. 计算得分
-            logger.info("步骤5: 计算股票得分")
+            # 3. 股票评分
+            self.logger.info("步骤3: 股票评分和排序")
             scored_stocks = self.scoring_engine.score_stocks(all_features)
             
-            # 6. 获取推荐
-            logger.info("步骤6: 生成推荐列表")
-            top_stocks = self.scoring_engine.get_top_recommendations(
-                scored_stocks, self.config['top_recommendations']
+            # 获取Top推荐
+            top_recommendations = self.scoring_engine.get_top_recommendations(
+                scored_stocks, top_n
             )
             
-            # 7. 格式化结果
-            logger.info("步骤7: 格式化推荐结果")
-            formatted_results = self.scoring_engine.format_recommendation_result(top_stocks)
+            # 4. ML预测增强 (可选)
+            self.logger.info("步骤4: ML预测增强")
+            try:
+                # 获取推荐股票的ML预测
+                recommended_codes = [stock['stock_code'] for stock in top_recommendations]
+                ml_predictions = self.ml_predictor.predict_today_updown(recommended_codes)
+                
+                # 将ML预测结果添加到推荐中
+                for stock in top_recommendations:
+                    stock_code = stock['stock_code']
+                    if stock_code in ml_predictions:
+                        stock['ml_up_probability'] = ml_predictions[stock_code]
+                        stock['ml_prediction'] = '看涨' if ml_predictions[stock_code] > 0.5 else '看跌'
+                        stock['ml_confidence'] = 'high' if abs(ml_predictions[stock_code] - 0.5) > 0.2 else 'medium'
+                    else:
+                        stock['ml_up_probability'] = None
+                        stock['ml_prediction'] = '无预测'
+                        stock['ml_confidence'] = 'none'
+                
+                self.logger.info(f"ML预测完成，预测了{len(ml_predictions)}只股票")
+                
+            except Exception as e:
+                self.logger.warning(f"ML预测失败，跳过此步骤: {e}")
+                # 如果ML预测失败，添加默认值
+                for stock in top_recommendations:
+                    stock['ml_up_probability'] = None
+                    stock['ml_prediction'] = '模型未加载'
+                    stock['ml_confidence'] = 'none'
             
-            # 8. 生成最终结果
-            result = {
-                'date': datetime.now().strftime('%Y-%m-%d'),
-                'time': datetime.now().strftime('%H:%M:%S'),
-                'total_analyzed': len(all_features),
-                'total_recommended': len(formatted_results),
-                'recommendations': formatted_results,
-                'system_info': {
-                    'version': '1.0',
-                    'config': self.config
+            # 格式化结果
+            formatted_results = self.scoring_engine.format_recommendation_result(
+                top_recommendations
+            )
+            
+            self.logger.info(f"生成{len(formatted_results)}只推荐股票")
+            
+            # 5. 保存结果
+            if save_results:
+                self.logger.info("步骤5: 保存推荐结果")
+                self.result_writer.write_buy_recommendations(formatted_results)
+                
+                if export_excel:
+                    self.result_writer.export_to_excel(formatted_results)
+                
+                # 清理旧文件
+                self.result_writer.cleanup_old_files()
+            
+            self.logger.info("股票推荐系统运行完成")
+            return formatted_results
+            
+        except Exception as e:
+            self.logger.error(f"股票推荐系统运行失败: {e}")
+            raise
+    
+    def run_sell_analysis(self, 
+                         portfolio_file: Optional[str] = None,
+                         save_results: bool = True) -> List[Dict]:
+        """
+        运行卖出决策分析
+        
+        Args:
+            portfolio_file: 持仓文件路径，如果为None则从历史推荐中加载
+            save_results: 是否保存结果到文件
+            
+        Returns:
+            卖出决策列表
+        """
+        try:
+            self.logger.info("开始运行卖出决策分析...")
+            
+            # 加载持仓股票
+            if portfolio_file:
+                # 从指定文件加载
+                import json
+                with open(portfolio_file, 'r', encoding='utf-8') as f:
+                    portfolio = json.load(f)
+            else:
+                # 从历史推荐中加载
+                portfolio = self.result_writer.load_previous_recommendations()
+            
+            if not portfolio:
+                self.logger.warning("没有找到持仓股票数据")
+                return []
+            
+            # 提取股票代码
+            stock_codes = [stock['stock_code'] for stock in portfolio]
+            self.logger.info(f"分析{len(stock_codes)}只持仓股票")
+            
+            # 获取当前数据
+            current_data = self.data_fetcher.get_all_data(stock_codes)
+            
+            # 提取特征
+            current_features = self.feature_extractor.batch_extract_features(current_data)
+            
+            # 卖出决策分析
+            sell_decisions = []
+            
+            for stock in portfolio:
+                stock_code = stock['stock_code']
+                
+                if stock_code not in current_features:
+                    continue
+                
+                features = current_features[stock_code]
+                current_price = features.get('current_price', 0)
+                original_price = stock.get('current_price', current_price)
+                
+                # 计算收益率
+                return_rate = ((current_price - original_price) / original_price * 100 
+                              if original_price > 0 else 0)
+                
+                # 重新评分
+                total_score, score_details = self.scoring_engine.calculate_comprehensive_score(features)
+                
+                # 卖出决策逻辑
+                sell_signal = False
+                sell_reason = []
+                
+                # 止盈止损逻辑
+                if return_rate >= 20:  # 止盈
+                    sell_signal = True
+                    sell_reason.append(f"达到止盈目标({return_rate:.1f}%)")
+                elif return_rate <= -10:  # 止损
+                    sell_signal = True
+                    sell_reason.append(f"触发止损({return_rate:.1f}%)")
+                
+                # 技术面恶化
+                if total_score < -5:
+                    sell_signal = True
+                    sell_reason.append("技术面恶化")
+                
+                # RSI过热
+                if features.get('rsi', 50) > 80:
+                    sell_signal = True
+                    sell_reason.append("RSI过热")
+                
+                decision = {
+                    'stock_code': stock_code,
+                    'stock_name': features.get('stock_name', ''),
+                    'original_price': original_price,
+                    'current_price': current_price,
+                    'return_rate': return_rate,
+                    'current_score': total_score,
+                    'sell_signal': sell_signal,
+                    'sell_reason': '; '.join(sell_reason) if sell_reason else '持有',
+                    'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
-            }
+                
+                sell_decisions.append(decision)
             
-            logger.info(f"买入推荐生成完成，共推荐{len(formatted_results)}只股票")
-            return result
+            # 保存卖出决策
+            if save_results:
+                self.result_writer.write_sell_decisions(sell_decisions)
+            
+            self.logger.info(f"卖出决策分析完成，共分析{len(sell_decisions)}只股票")
+            return sell_decisions
             
         except Exception as e:
-            logger.error(f"生成买入推荐失败: {e}")
-            return {
-                'date': datetime.now().strftime('%Y-%m-%d'),
-                'time': datetime.now().strftime('%H:%M:%S'),
-                'error': str(e),
-                'recommendations': []
-            }
+            self.logger.error(f"卖出决策分析失败: {e}")
+            raise
     
-    def generate_sell_recommendations(self) -> Dict:
-        """生成卖出建议"""
-        logger.info("="*50)
-        logger.info("开始生成卖出建议")
-        logger.info("="*50)
+    def get_performance_summary(self) -> Dict:
+        """
+        获取系统性能摘要
         
+        Returns:
+            性能摘要字典
+        """
         try:
-            # 执行卖出分析
-            sell_result = self.sell_decision.execute_sell_analysis()
-            
-            logger.info(f"卖出建议生成完成")
-            return sell_result
-            
+            return self.result_writer.get_performance_summary()
         except Exception as e:
-            logger.error(f"生成卖出建议失败: {e}")
-            return {
-                'date': datetime.now().strftime('%Y-%m-%d'),
-                'time': datetime.now().strftime('%H:%M:%S'),
-                'error': str(e),
-                'decisions': []
-            }
+            self.logger.error(f"获取性能摘要失败: {e}")
+            return {}
     
-    def save_results(self, buy_result: Dict, sell_result: Dict) -> None:
-        """保存结果到文件"""
-        today = datetime.now().strftime('%Y%m%d')
+    def print_results(self, results: List[Dict], result_type: str = "推荐"):
+        """
+        打印结果到控制台
         
-        # 保存买入推荐
-        if buy_result.get('recommendations'):
-            buy_file = f"result/buy_{today}.json"
-            try:
-                with open(buy_file, 'w', encoding='utf-8') as f:
-                    json.dump(buy_result, f, ensure_ascii=False, indent=2)
-                logger.info(f"买入推荐已保存到: {buy_file}")
-            except Exception as e:
-                logger.error(f"保存买入推荐失败: {e}")
+        Args:
+            results: 结果列表
+            result_type: 结果类型（推荐/卖出）
+        """
+        print(f"\n=== {result_type}结果 ===")
+        print(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"共{len(results)}只股票\n")
         
-        # 保存卖出建议
-        if sell_result.get('decisions'):
-            sell_file = f"result/sell_{today}.json"
-            try:
-                with open(sell_file, 'w', encoding='utf-8') as f:
-                    json.dump(sell_result, f, ensure_ascii=False, indent=2)
-                logger.info(f"卖出建议已保存到: {sell_file}")
-            except Exception as e:
-                logger.error(f"保存卖出建议失败: {e}")
-    
-    def print_summary(self, buy_result: Dict, sell_result: Dict) -> None:
-        """打印结果摘要"""
-        print("\n" + "="*60)
-        print(f"股票推荐系统 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*60)
-        
-        # 买入推荐摘要
-        print("\n【买入推荐】")
-        if buy_result.get('recommendations'):
-            print(f"共推荐 {len(buy_result['recommendations'])} 只股票:")
-            for i, stock in enumerate(buy_result['recommendations'][:5], 1):
-                print(f"{i:2d}. {stock['stock_name']}({stock['stock_code']}) - "
-                      f"价格: {stock['current_price']:.2f} - 得分: {stock['total_score']:.2f}")
-                print(f"     推荐理由: {stock['recommendation_reason']}")
-            
-            if len(buy_result['recommendations']) > 5:
-                print(f"     ... 还有 {len(buy_result['recommendations']) - 5} 只股票")
-        else:
-            print("今日无推荐股票")
-        
-        # 卖出建议摘要
-        print("\n【卖出建议】")
-        if sell_result.get('decisions'):
-            summary = sell_result.get('summary', {})
-            print(f"共分析 {summary.get('total_stocks', 0)} 只持仓股票:")
-            print(f"  建议卖出: {summary.get('sell_count', 0)} 只")
-            print(f"  建议减仓: {summary.get('reduce_count', 0)} 只")
-            print(f"  继续持有: {summary.get('hold_count', 0)} 只")
-            print(f"  平均收益率: {summary.get('avg_return_rate', 0):.2f}%")
-            
-            # 显示需要操作的股票
-            action_stocks = [d for d in sell_result['decisions'] 
-                           if d['action'] in ['SELL', 'REDUCE']]
-            if action_stocks:
-                print("\n需要操作的股票:")
-                for stock in action_stocks[:5]:
-                    action_text = "卖出" if stock['action'] == 'SELL' else f"减仓{stock['sell_ratio']*100:.0f}%"
-                    print(f"  {stock['stock_name']}({stock['stock_code']}) - {action_text}")
-                    print(f"    收益率: {stock['return_rate']:.2f}% - {stock['reason']}")
-        else:
-            print("无持仓股票需要分析")
-        
-        print("\n" + "="*60)
-    
-    def run_daily_analysis(self) -> None:
-        """执行每日分析"""
-        logger.info("开始执行每日股票分析")
-        start_time = time.time()
-        
-        try:
-            # 生成买入推荐（14:45执行）
-            buy_result = self.generate_buy_recommendations()
-            
-            # 生成卖出建议（9:45执行）
-            sell_result = self.generate_sell_recommendations()
-            
-            # 保存结果
-            self.save_results(buy_result, sell_result)
-            
-            # 打印摘要
-            self.print_summary(buy_result, sell_result)
-            
-            end_time = time.time()
-            logger.info(f"每日分析完成，耗时: {end_time - start_time:.2f}秒")
-            
-        except Exception as e:
-            logger.error(f"每日分析失败: {e}")
-    
-    def run_buy_analysis_only(self) -> None:
-        """仅执行买入分析（14:45）"""
-        logger.info("执行买入分析")
-        
-        buy_result = self.generate_buy_recommendations()
-        
-        # 保存买入推荐
-        today = datetime.now().strftime('%Y%m%d')
-        buy_file = f"result/buy_{today}.json"
-        
-        try:
-            with open(buy_file, 'w', encoding='utf-8') as f:
-                json.dump(buy_result, f, ensure_ascii=False, indent=2)
-            logger.info(f"买入推荐已保存到: {buy_file}")
-        except Exception as e:
-            logger.error(f"保存买入推荐失败: {e}")
-        
-        # 打印买入推荐
-        if buy_result.get('recommendations'):
-            print(f"\n今日买入推荐 ({len(buy_result['recommendations'])}只):")
-            for i, stock in enumerate(buy_result['recommendations'], 1):
-                print(f"{i:2d}. {stock['stock_name']}({stock['stock_code']}) - "
-                      f"价格: {stock['current_price']:.2f} - 得分: {stock['total_score']:.2f}")
-    
-    def run_sell_analysis_only(self) -> None:
-        """仅执行卖出分析（9:45）"""
-        logger.info("执行卖出分析")
-        
-        sell_result = self.generate_sell_recommendations()
-        
-        # 保存卖出建议
-        today = datetime.now().strftime('%Y%m%d')
-        sell_file = f"result/sell_{today}.json"
-        
-        try:
-            with open(sell_file, 'w', encoding='utf-8') as f:
-                json.dump(sell_result, f, ensure_ascii=False, indent=2)
-            logger.info(f"卖出建议已保存到: {sell_file}")
-        except Exception as e:
-            logger.error(f"保存卖出建议失败: {e}")
-        
-        # 打印卖出建议
-        if sell_result.get('decisions'):
-            summary = sell_result.get('summary', {})
-            print(f"\n今日卖出建议 (分析{summary.get('total_stocks', 0)}只):")
-            print(f"建议卖出: {summary.get('sell_count', 0)}只, "
-                  f"建议减仓: {summary.get('reduce_count', 0)}只, "
-                  f"继续持有: {summary.get('hold_count', 0)}只")
-    
-    def setup_scheduler(self) -> None:
-        """设置定时任务"""
-        # 每个交易日14:45执行买入分析
-        schedule.every().monday.at("14:45").do(self.run_buy_analysis_only)
-        schedule.every().tuesday.at("14:45").do(self.run_buy_analysis_only)
-        schedule.every().wednesday.at("14:45").do(self.run_buy_analysis_only)
-        schedule.every().thursday.at("14:45").do(self.run_buy_analysis_only)
-        schedule.every().friday.at("14:45").do(self.run_buy_analysis_only)
-        
-        # 每个交易日9:45执行卖出分析
-        schedule.every().monday.at("09:45").do(self.run_sell_analysis_only)
-        schedule.every().tuesday.at("09:45").do(self.run_sell_analysis_only)
-        schedule.every().wednesday.at("09:45").do(self.run_sell_analysis_only)
-        schedule.every().thursday.at("09:45").do(self.run_sell_analysis_only)
-        schedule.every().friday.at("09:45").do(self.run_sell_analysis_only)
-        
-        logger.info("定时任务设置完成")
-    
-    def run_scheduler(self) -> None:
-        """运行定时任务"""
-        self.setup_scheduler()
-        
-        logger.info("股票推荐系统启动，等待定时执行...")
-        logger.info("买入分析时间: 每个交易日 14:45")
-        logger.info("卖出分析时间: 每个交易日 09:45")
-        
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # 每分钟检查一次
+        if result_type == "推荐":
+            for result in results:
+                print(f"排名{result['rank']:2d}: {result['stock_name']}({result['stock_code']})")
+                print(f"         价格: {result['current_price']:6.2f} 涨跌: {result['change_pct']:+5.2f}%")
+                print(f"         得分: {result['total_score']:6.2f}")
+                print(f"         理由: {result['recommendation_reason']}")
+                print()
+        else:  # 卖出决策
+            for result in results:
+                signal = "🔴 卖出" if result['sell_signal'] else "🟢 持有"
+                print(f"{signal}: {result['stock_name']}({result['stock_code']})")
+                print(f"         收益: {result['return_rate']:+6.2f}% ({result['original_price']:.2f} -> {result['current_price']:.2f})")
+                print(f"         得分: {result['current_score']:6.2f}")
+                print(f"         建议: {result['sell_reason']}")
+                print()
 
 def main():
     """主函数"""
-    import sys
+    import argparse
     
-    system = StockRecommendationSystem()
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='股票推荐系统')
+    parser.add_argument('--config', default='config.yaml', help='配置文件路径')
+    parser.add_argument('--stock-universe', default='default', 
+                       choices=['default', 'conservative', 'aggressive'],
+                       help='股票池策略')
+    parser.add_argument('--factor-strategy', default='default',
+                       choices=['default', 'momentum_focused', 'capital_flow_focused', 'conservative'],
+                       help='因子策略')
+    parser.add_argument('--time-period', default='default',
+                       choices=['short_term', 'medium_term', 'long_term'],
+                       help='时间周期')
+    parser.add_argument('--top-n', type=int, default=10, help='推荐股票数量')
+    parser.add_argument('--no-sell-analysis', action='store_true', help='跳过卖出分析')
     
-    if len(sys.argv) > 1:
-        command = sys.argv[1].lower()
+    args = parser.parse_args()
+    
+    try:
+        # 创建推荐系统实例
+        system = StockRecommendationSystem(
+            config_path=args.config,
+            stock_universe=args.stock_universe,
+            factor_strategy=args.factor_strategy,
+            time_period=args.time_period
+        )
         
-        if command == 'buy':
-            system.run_buy_analysis_only()
-        elif command == 'sell':
-            system.run_sell_analysis_only()
-        elif command == 'both':
-            system.run_daily_analysis()
-        elif command == 'schedule':
-            system.run_scheduler()
+        print(f"配置信息:")
+        print(f"  股票池策略: {args.stock_universe}")
+        print(f"  因子策略: {args.factor_strategy}")
+        print(f"  时间周期: {args.time_period}")
+        print(f"  推荐数量: {args.top_n}")
+        print()
+        
+        # 运行推荐
+        recommendations = system.run_recommendation(top_n=args.top_n)
+        
+        if recommendations:
+            print(f"推荐成功！共推荐 {len(recommendations)} 只股票")
+            
+            # 运行卖出分析
+            if not args.no_sell_analysis:
+                sell_decisions = system.run_sell_analysis()
+                if sell_decisions:
+                    print(f"卖出分析完成！共分析 {len(sell_decisions)} 只股票")
         else:
-            print("使用方法:")
-            print("  python main.py buy      # 执行买入分析")
-            print("  python main.py sell     # 执行卖出分析")
-            print("  python main.py both     # 执行完整分析")
-            print("  python main.py schedule # 启动定时任务")
-    else:
-        # 默认执行完整分析
-        system.run_daily_analysis()
+            print("推荐失败")
+            
+    except Exception as e:
+        print(f"系统运行出错：{e}")
+        logger.error(f"系统运行出错：{e}")
 
 if __name__ == "__main__":
     main()

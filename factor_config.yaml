@@ -18,9 +18,20 @@ factor_weights:
   large_inflow_score: 0.05   # 大单资金净流入评分
   capital_strength: 0.05     # 综合资金强度
   
-  # 技术指标权重 (总权重: 0.08)
+  # 技术指标权重 (总权重: 0.25)
   macd: 0.05             # MACD指标
+  macd_diff: 0.03        # MACD差值
   bollinger_position: 0.03   # 布林带位置
+  kdj_golden_cross: 0.04 # KDJ金叉
+  ma_slope_5d: 0.03      # 5日均线斜率
+  ma_slope_10d: 0.03     # 10日均线斜率
+  volume_ratio: 0.04     # 量比
+  
+  # 新增技术因子权重
+  momentum_5d_new: 0.08  # 近5日涨跌幅
+  limit_up_yesterday: 0.05   # 前一日涨停状态
+  sector_performance: 0.06   # 所属行业表现
+  main_capital_inflow: 0.07  # 主力资金净流入
   
   # 情绪因子权重 (总权重: 0.17)
   news_sentiment_score: 0.08     # 新闻情绪评分
